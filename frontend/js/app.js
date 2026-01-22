@@ -106,6 +106,7 @@ class K12MediaApp {
             if (result.success) {
                 window.api.setCookie(result.cookie);
                 this.setConnected(true);
+                await this.loadExams();
                 this.showToast('登錄成功！', 'success');
             } else {
                 this.showToast(result.error || '登錄失敗', 'error');
@@ -172,6 +173,35 @@ class K12MediaApp {
         }
     }
 
+    // ========== Exam Selection ==========
+
+    async loadExams() {
+        const examSelect = document.getElementById('examSelect');
+        if (!examSelect) return;
+
+        try {
+            // Show loading state in dropdown
+            examSelect.innerHTML = '<option>加載考試列表...</option>';
+
+            const exams = await window.api.getExams();
+            if (exams && exams.length > 0) {
+                examSelect.innerHTML = exams.map(exam =>
+                    `<option value="${exam.id}">${exam.name}</option>`
+                ).join('');
+                // Select the first one by default (usually latest)
+                examSelect.value = exams[0].id;
+                this.showToast(`已加載 ${exams.length} 場考試`, 'success');
+            } else {
+                examSelect.innerHTML = '<option value="" disabled>未找到考試</option>';
+                this.showToast('未找到可用考試', 'warning');
+            }
+        } catch (error) {
+            console.error('Load exams failed:', error);
+            examSelect.innerHTML = '<option value="" disabled>加載失敗</option>';
+            this.showToast('加載考試列表失敗', 'error');
+        }
+    }
+
     // ========== Student Search ==========
 
     async handleSearch() {
@@ -181,11 +211,17 @@ class K12MediaApp {
             return;
         }
 
+        const testId = document.getElementById('examSelect').value;
+        if (!testId) {
+            this.showToast('請選擇一場考試', 'warning');
+            return;
+        }
+
         this.searchResult.innerHTML = '<div class="loading-state"><div class="spinner"></div><p>正在搜索...</p></div>';
         this.searchBtn.disabled = true;
 
         try {
-            const result = await window.api.getStudentImages(query);
+            const result = await window.api.getStudentImages(query, testId);
             this.studentData = result;
             this.currentStudent = result.student;
             this.displayStudentInfo(result.student);

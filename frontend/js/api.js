@@ -41,7 +41,11 @@ class K12MediaAPI {
      * Make API request with authentication
      */
     async request(endpoint, options = {}) {
-        const url = `${API_BASE}${endpoint}`;
+        // Ensure endpoint starts with /
+        const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
+        // Construct URL with /api prefix
+        const url = `${API_BASE}/api${path}`;
+
         const headers = {
             'Content-Type': 'application/json',
             ...options.headers,
@@ -86,10 +90,17 @@ class K12MediaAPI {
     }
 
     /**
+     * Get list of exams
+     */
+    async getExams() {
+        return await this.request('/exams');
+    }
+
+    /**
      * Get all students
      */
-    async getStudents() {
-        return await this.request('/students');
+    async getStudents(testId) {
+        return await this.request(`/students?testId=${testId}`);
     }
 
     /**
@@ -102,12 +113,13 @@ class K12MediaAPI {
     /**
      * Get student images
      * @param {string} identifier - Student number or name
+     * @param {string|null} testId - Exam ID
      * @param {number|null} subjectId - Optional subject ID (null for all)
      */
-    async getStudentImages(identifier, subjectId = null) {
-        let endpoint = `/student/${encodeURIComponent(identifier)}/images`;
+    async getStudentImages(identifier, testId, subjectId = null) {
+        let endpoint = `/student/${encodeURIComponent(identifier)}/images?testId=${testId}`;
         if (subjectId) {
-            endpoint += `?subjectId=${subjectId}`;
+            endpoint += `&subjectId=${subjectId}`;
         }
         return await this.request(endpoint);
     }
@@ -116,7 +128,7 @@ class K12MediaAPI {
      * Get proxied image URL
      */
     getProxyImageUrl(originalUrl) {
-        return `${API_BASE}/proxy-image?url=${encodeURIComponent(originalUrl)}`;
+        return `${API_BASE}/api/proxy-image?url=${encodeURIComponent(originalUrl)}`;
     }
 
     /**

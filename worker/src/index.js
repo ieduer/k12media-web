@@ -12,6 +12,7 @@
 import { validateCookie, ssoLogin } from './auth.js';
 import { fetchAllStudents, findStudent } from './dwr.js';
 import { fetchStudentImages, proxyImage } from './image.js';
+import { fetchExams } from './exam.js';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -71,6 +72,10 @@ export default {
         return await handleProxyImageRoute(request, env);
       }
 
+      if (path === '/api/exams' && request.method === 'GET') {
+        return await handleExamsRoute(request, env);
+      }
+
       if (path === '/api/subjects') {
         return jsonResponse({ subjects: SUBJECT_NAMES });
       }
@@ -119,7 +124,14 @@ async function handleStudentsRoute(request, env) {
     return jsonResponse({ error: 'X-Cookie header is required' }, 401);
   }
 
-  const students = await fetchAllStudents(cookie, CLASSES, env);
+  const url = new URL(request.url);
+  const testId = url.searchParams.get('testId');
+
+  if (!testId) {
+    return jsonResponse({ error: 'testId parameter is required' }, 400);
+  }
+
+  const students = await fetchAllStudents(cookie, CLASSES, testId, env);
   return jsonResponse({ students, count: students.length });
 }
 
@@ -138,9 +150,14 @@ async function handleStudentImagesRoute(request, env, path) {
   const identifier = decodeURIComponent(matches[1]);
   const url = new URL(request.url);
   const subjectId = url.searchParams.get('subjectId');
+  const testId = url.searchParams.get('testId');
+
+  if (!testId) {
+    return jsonResponse({ error: 'testId parameter is required' }, 400);
+  }
 
   // First, find the student
-  const students = await fetchAllStudents(cookie, CLASSES, env);
+  const students = await fetchAllStudents(cookie, CLASSES, testId, env);
   const student = findStudent(students, identifier);
 
   if (!student) {
@@ -152,7 +169,7 @@ async function handleStudentImagesRoute(request, env, path) {
   const result = {};
 
   for (const sid of subjects) {
-    const images = await fetchStudentImages(cookie, student, sid, env);
+    const images = await fetchStudentImages(cookie, student, sid, testId, env);
     result[sid] = {
       subjectName: SUBJECT_NAMES[sid] || `科目${sid}`,
       images: images,
@@ -188,6 +205,16 @@ async function handleProxyImageRoute(request, env) {
       'Cache-Control': 'public, max-age=3600',
     },
   });
+}
+
+async function handleExamsRoute(request, env) {
+  const cookie = request.headers.get('X-Cookie');
+  if (!cookie) {
+    return jsonResponse({ error: 'X-Cookie header is required' }, 401);
+  }
+
+  const exams = await fetchExams(cookie);
+  return jsonResponse({ exams });
 }
 
 // Utility function

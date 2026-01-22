@@ -8,19 +8,18 @@ import { buildHeaders } from './auth.js';
 const BASE_URL_MAIN = 'https://test.k12media.cn';
 const BASE_URL_IMG = 'https://yue.k12media.cn';
 const SHOW_STUDENT_FIND_PATH = '/tqms/report/ShowStudentImgsAction.a?findStudentImgs';
-const TEST_ID = 119274;
 const SCHOOL_ID = 3600;
 const TEST_STATE = 1;
 
 /**
  * Fetch the HTML page containing student's answer sheet images
  */
-async function fetchStudentImgHtml(cookie, student, subjectId) {
+async function fetchStudentImgHtml(cookie, student, subjectId, testId) {
     const url = `${BASE_URL_MAIN}${SHOW_STUDENT_FIND_PATH}`;
 
     const formData = new URLSearchParams({
         schoolId: String(SCHOOL_ID),
-        testId: String(TEST_ID),
+        testId: String(testId),
         testState: String(TEST_STATE),
         studentName: student.name,
         classId: String(student.classId),
@@ -78,9 +77,9 @@ function extractImageUrls(html) {
 /**
  * Fetch all images for a student and subject
  */
-export async function fetchStudentImages(cookie, student, subjectId, env) {
+export async function fetchStudentImages(cookie, student, subjectId, testId, env) {
     try {
-        const html = await fetchStudentImgHtml(cookie, student, subjectId);
+        const html = await fetchStudentImgHtml(cookie, student, subjectId, testId);
         const imageUrls = extractImageUrls(html);
 
         return imageUrls.map((url, index) => ({

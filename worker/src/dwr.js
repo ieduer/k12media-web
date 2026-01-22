@@ -7,7 +7,6 @@ import { extractDwrSessionId, buildHeaders } from './auth.js';
 
 const BASE_URL_MAIN = 'https://test.k12media.cn';
 const DWR_STUDENT_LIST_URL = `${BASE_URL_MAIN}/tqms/dwr/call/plaincall/SelectSchoolUtil.findStudentListByClassId.dwr`;
-const TEST_ID = 119274;
 const SCHOOL_ID = 3600;
 
 /**
@@ -72,9 +71,9 @@ function parseStudentList(text, classConfig) {
 /**
  * Fetch students for a single class
  */
-async function fetchStudentsForClass(cookie, classConfig) {
+async function fetchStudentsForClass(cookie, classConfig, testId) {
     const dwrSessionId = extractDwrSessionId(cookie);
-    const body = buildDwrBody(TEST_ID, SCHOOL_ID, classConfig.classId, classConfig.isTeacherClass, dwrSessionId);
+    const body = buildDwrBody(testId, SCHOOL_ID, classConfig.classId, classConfig.isTeacherClass, dwrSessionId);
 
     const response = await fetch(DWR_STUDENT_LIST_URL, {
         method: 'POST',
@@ -96,13 +95,13 @@ async function fetchStudentsForClass(cookie, classConfig) {
 /**
  * Fetch all students from all configured classes
  */
-export async function fetchAllStudents(cookie, classes, env) {
+export async function fetchAllStudents(cookie, classes, testId, env) {
     const allStudents = [];
     const seen = new Set();
 
     for (const classConfig of classes) {
         try {
-            const students = await fetchStudentsForClass(cookie, classConfig);
+            const students = await fetchStudentsForClass(cookie, classConfig, testId);
 
             for (const student of students) {
                 const key = `${student.classId}-${student.noInClass}-${student.name}`;
