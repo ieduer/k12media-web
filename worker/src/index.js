@@ -8,7 +8,7 @@
  * - GET  /api/proxy-image - Proxy image requests
  */
 
-import { handleAuth, validateCookie } from './auth.js';
+import { validateCookie } from './auth.js';
 import { fetchAllStudents, findStudent } from './dwr.js';
 import { fetchStudentImages, proxyImage } from './image.js';
 
@@ -163,7 +163,7 @@ async function handleProxyImageRoute(request, env) {
   }
 
   const imageResponse = await proxyImage(imageUrl, cookie, env);
-  
+
   return new Response(imageResponse.body, {
     headers: {
       ...CORS_HEADERS,

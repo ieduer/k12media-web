@@ -4,7 +4,7 @@
 
 const API_BASE = window.location.hostname === 'localhost'
     ? 'http://localhost:8787'
-    : '/api';
+    : 'https://k12media-api.bdfz.workers.dev';
 
 class K12MediaAPI {
     constructor() {
