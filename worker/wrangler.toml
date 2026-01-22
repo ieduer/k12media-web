@@ -1,0 +1,9 @@
+name = "k12media-api"
+main = "src/index.js"
+compatibility_date = "2024-01-01"
+
+[vars]
+BASE_URL_MAIN = "https://test.k12media.cn"
+BASE_URL_IMG = "https://yue.k12media.cn"
+TEST_ID = "119274"
+SCHOOL_ID = "3600"

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>K12Media 試卷查看器</title>
+  <meta name="description" content="在線查看學生答卷圖片，支持按科目分類預覽">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="header-content">
+        <h1 class="logo">
+          <span class="logo-icon">📋</span>
+          K12Media 試卷查看器
+        </h1>
+        <div class="connection-status" id="connectionStatus">
+          <span class="status-dot"></span>
+          <span class="status-text">未連接</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Auth Section -->
+      <section class="auth-section glass-card" id="authSection">
+        <h2 class="section-title">🔐 認證登錄</h2>
+        <p class="section-desc">請從瀏覽器複製 k12media.cn 的 Cookie</p>
+        <div class="auth-form">
+          <textarea 
+            id="cookieInput" 
+            class="cookie-input" 
+            placeholder="粘貼 Cookie 字符串 (JSESSIONID=xxx; DWRSESSIONID=xxx; ...)"
+            rows="3"
+          ></textarea>
+          <button id="authBtn" class="btn btn-primary">
+            <span class="btn-icon">🔗</span>
+            連接
+          </button>
+        </div>
+        <div class="auth-help">
+          <details>
+            <summary>如何獲取 Cookie？</summary>
+            <ol>
+              <li>在瀏覽器中登錄 <a href="https://test.k12media.cn" target="_blank">test.k12media.cn</a></li>
+              <li>按 F12 打開開發者工具</li>
+              <li>切換到 Network（網絡）標籤</li>
+              <li>刷新頁面，點擊任意請求</li>
+              <li>在 Headers 中找到 Cookie，複製完整內容</li>
+            </ol>
+          </details>
+        </div>
+      </section>
+
+      <!-- Search Section (Hidden until authenticated) -->
+      <section class="search-section glass-card hidden" id="searchSection">
+        <h2 class="section-title">🔍 學生查詢</h2>
+        <div class="search-form">
+          <div class="search-input-group">
+            <input 
+              type="text" 
+              id="searchInput" 
+              class="search-input" 
+              placeholder="輸入學號 (如 2722134) 或姓名 (如 張三)"
+            >
+            <button id="searchBtn" class="btn btn-primary">
+              <span class="btn-icon">🔎</span>
+              查詢
+            </button>
+          </div>
+        </div>
+        <div id="searchResult" class="search-result"></div>
+      </section>
+
+      <!-- Subject Tabs & Images (Hidden until student found) -->
+      <section class="viewer-section glass-card hidden" id="viewerSection">
+        <div class="student-info" id="studentInfo"></div>
+        
+        <div class="subject-tabs" id="subjectTabs">
+          <button class="tab-btn active" data-subject="all">全部</button>
+          <button class="tab-btn" data-subject="1">語文</button>
+          <button class="tab-btn" data-subject="2">數學</button>
+          <button class="tab-btn" data-subject="3">英語</button>
+          <button class="tab-btn" data-subject="4">物理</button>
+          <button class="tab-btn" data-subject="5">化學</button>
+          <button class="tab-btn" data-subject="6">生物</button>
+          <button class="tab-btn" data-subject="7">政治</button>
+          <button class="tab-btn" data-subject="8">歷史</button>
+          <button class="tab-btn" data-subject="9">地理</button>
+        </div>
+
+        <div class="images-container" id="imagesContainer">
+          <div class="loading-state">
+            <div class="spinner"></div>
+            <p>正在加載圖片...</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI Features Section (Placeholder) -->
+      <section class="ai-section glass-card hidden" id="aiSection">
+        <h2 class="section-title">🤖 AI 功能（開發中）</h2>
+        <div class="ai-features">
+          <div class="ai-feature disabled">
+            <span class="feature-icon">📝</span>
+            <span class="feature-name">文字識別</span>
+            <span class="feature-badge">即將推出</span>
+          </div>
+          <div class="ai-feature disabled">
+            <span class="feature-icon">✅</span>
+            <span class="feature-name">AI 閱卷</span>
+            <span class="feature-badge">即將推出</span>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Image Lightbox -->
+    <div class="lightbox hidden" id="lightbox">
+      <button class="lightbox-close" id="lightboxClose">&times;</button>
+      <button class="lightbox-nav lightbox-prev" id="lightboxPrev">‹</button>
+      <button class="lightbox-nav lightbox-next" id="lightboxNext">›</button>
+      <div class="lightbox-content">
+        <img id="lightboxImg" src="" alt="答卷圖片">
+        <div class="lightbox-info" id="lightboxInfo"></div>
+      </div>
+    </div>
+
+    <!-- Toast Notifications -->
+    <div class="toast-container" id="toastContainer"></div>
+  </div>
+
+  <script src="js/api.js"></script>
+  <script src="js/preview.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
