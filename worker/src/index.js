@@ -2,13 +2,14 @@
  * K12Media API Proxy Worker
  * 
  * Routes:
- * - POST /api/auth      - Validate cookie
- * - GET  /api/students  - Get all students from configured classes
+ * - POST /api/login      - Login with username/password via SSO
+ * - POST /api/auth       - Validate cookie
+ * - GET  /api/students   - Get all students from configured classes
  * - GET  /api/student/:identifier/images - Get images for a student
  * - GET  /api/proxy-image - Proxy image requests
  */
 
-import { validateCookie } from './auth.js';
+import { validateCookie, ssoLogin } from './auth.js';
 import { fetchAllStudents, findStudent } from './dwr.js';
 import { fetchStudentImages, proxyImage } from './image.js';
 
@@ -50,6 +51,10 @@ export default {
 
     try {
       // Route handling
+      if (path === '/api/login' && request.method === 'POST') {
+        return await handleLoginRoute(request, env);
+      }
+
       if (path === '/api/auth' && request.method === 'POST') {
         return await handleAuthRoute(request, env);
       }
@@ -84,6 +89,18 @@ export default {
 };
 
 // Route handlers
+async function handleLoginRoute(request, env) {
+  const body = await request.json();
+  const { username, password } = body;
+
+  if (!username || !password) {
+    return jsonResponse({ error: '用戶名和密碼不能為空' }, 400);
+  }
+
+  const result = await ssoLogin(username, password);
+  return jsonResponse(result);
+}
+
 async function handleAuthRoute(request, env) {
   const body = await request.json();
   const cookie = body.cookie;

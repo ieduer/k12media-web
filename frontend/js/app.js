@@ -21,6 +21,14 @@ class K12MediaApp {
         this.imagesContainer = document.getElementById('imagesContainer');
         this.toastContainer = document.getElementById('toastContainer');
 
+        // New Login Elements
+        this.ssoLoginBtn = document.getElementById('ssoLoginBtn');
+        this.usernameInput = document.getElementById('usernameInput');
+        this.passwordInput = document.getElementById('passwordInput');
+        this.ssoForm = document.getElementById('ssoForm');
+        this.cookieForm = document.getElementById('cookieForm');
+        this.authTabs = document.querySelector('.auth-tabs');
+
         // State
         this.currentStudent = null;
         this.currentSubject = 'all';
@@ -33,6 +41,15 @@ class K12MediaApp {
     init() {
         // Bind event listeners
         this.authBtn.addEventListener('click', () => this.handleAuth());
+        this.ssoLoginBtn.addEventListener('click', () => this.handleSsoLogin());
+
+        // Login Tabs
+        this.authTabs.addEventListener('click', (e) => {
+            if (e.target.classList.contains('auth-tab')) {
+                this.handleTabSwitch(e.target.dataset.tab);
+            }
+        });
+
         this.searchBtn.addEventListener('click', () => this.handleSearch());
         this.searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.handleSearch();
@@ -54,6 +71,52 @@ class K12MediaApp {
     }
 
     // ========== Authentication ==========
+
+    handleTabSwitch(tab) {
+        // Update tab buttons
+        this.authTabs.querySelectorAll('.auth-tab').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+
+        // Toggle forms
+        if (tab === 'sso') {
+            this.ssoForm.classList.remove('hidden');
+            this.cookieForm.classList.add('hidden');
+        } else {
+            this.ssoForm.classList.add('hidden');
+            this.cookieForm.classList.remove('hidden');
+        }
+    }
+
+    async handleSsoLogin() {
+        const username = this.usernameInput.value.trim();
+        const password = this.passwordInput.value.trim();
+
+        if (!username || !password) {
+            this.showToast('請輸入用戶名和密碼', 'warning');
+            return;
+        }
+
+        this.ssoLoginBtn.disabled = true;
+        this.ssoLoginBtn.innerHTML = '<span class="spinner" style="width:16px;height:16px;border-width:2px;margin-right:8px;"></span>登錄中...';
+
+        try {
+            const result = await window.api.login(username, password);
+
+            if (result.success) {
+                window.api.setCookie(result.cookie);
+                this.setConnected(true);
+                this.showToast('登錄成功！', 'success');
+            } else {
+                this.showToast(result.error || '登錄失敗', 'error');
+            }
+        } catch (error) {
+            this.showToast(`登錄請求失敗: ${error.message}`, 'error');
+        } finally {
+            this.ssoLoginBtn.disabled = false;
+            this.ssoLoginBtn.innerHTML = '<span class="btn-icon">🚀</span>登錄';
+        }
+    }
 
     async handleAuth() {
         const cookie = this.cookieInput.value.trim();

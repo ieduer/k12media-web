@@ -76,6 +76,16 @@ class K12MediaAPI {
     }
 
     /**
+     * Login with username/password
+     */
+    async login(username, password) {
+        return await this.request('/login', {
+            method: 'POST',
+            body: JSON.stringify({ username, password }),
+        });
+    }
+
+    /**
      * Get all students
      */
     async getStudents() {
