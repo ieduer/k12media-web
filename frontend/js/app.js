@@ -10,6 +10,7 @@ class K12MediaApp {
         this.searchSection = document.getElementById('searchSection');
         this.viewerSection = document.getElementById('viewerSection');
         this.aiSection = document.getElementById('aiSection');
+        this.batchDownloadSection = document.getElementById('batchDownloadSection');
 
         this.cookieInput = document.getElementById('cookieInput');
         this.authBtn = document.getElementById('authBtn');
@@ -29,11 +30,49 @@ class K12MediaApp {
         this.cookieForm = document.getElementById('cookieForm');
         this.authTabs = document.querySelector('.auth-tabs');
 
+        // Manual Exam Input Elements
+        this.manualExamInput = document.getElementById('manualExamInput');
+        this.manualTestIdInput = document.getElementById('manualTestId');
+        this.manualSchoolIdInput = document.getElementById('manualSchoolId');
+        this.applyManualExamBtn = document.getElementById('applyManualExamBtn');
+        this.refreshExamsBtn = document.getElementById('refreshExamsBtn');
+        this.examSelect = document.getElementById('examSelect');
+
+        // Batch Download Elements
+        this.batchDownloadBtn = document.getElementById('batchDownloadBtn');
+        this.batchSubjectSelect = document.getElementById('batchSubjectSelect');
+        this.classCheckboxes = document.getElementById('classCheckboxes');
+        this.batchProgress = document.getElementById('batchProgress');
+        this.progressText = document.getElementById('progressText');
+        this.progressPercent = document.getElementById('progressPercent');
+        this.progressFill = document.getElementById('progressFill');
+        this.progressDetails = document.getElementById('progressDetails');
+
         // State
         this.currentStudent = null;
         this.currentSubject = 'all';
         this.studentData = null;
         this.allImages = [];
+        this.currentTestId = null;
+        this.currentSchoolId = 3600;
+        this.isBatchDownloading = false;
+
+        // Download Modal Elements
+        this.downloadModal = document.getElementById('downloadModal');
+        this.modalBackdrop = document.getElementById('modalBackdrop');
+        this.modalClose = document.getElementById('modalClose');
+        this.downloadSummary = document.getElementById('downloadSummary');
+        this.previewImages = document.getElementById('previewImages');
+        this.confirmDownloadBtn = document.getElementById('confirmDownloadBtn');
+        this.cancelDownloadBtn = document.getElementById('cancelDownloadBtn');
+        this.downloadProgress = document.getElementById('downloadProgress');
+        this.modalProgressFill = document.getElementById('modalProgressFill');
+        this.modalProgressText = document.getElementById('modalProgressText');
+        this.downloadStudentBtn = document.getElementById('downloadStudentBtn');
+        this.downloadSubjectSelect = document.getElementById('downloadSubjectSelect');
+
+        // Pending download data
+        this.pendingDownload = null;
 
         this.init();
     }
@@ -61,6 +100,38 @@ class K12MediaApp {
                 this.handleSubjectChange(e.target.dataset.subject);
             }
         });
+
+        // Manual Exam Input
+        if (this.refreshExamsBtn) {
+            this.refreshExamsBtn.addEventListener('click', () => this.loadExams());
+        }
+        if (this.applyManualExamBtn) {
+            this.applyManualExamBtn.addEventListener('click', () => this.handleApplyManualExam());
+        }
+
+        // Batch Download
+        if (this.batchDownloadBtn) {
+            this.batchDownloadBtn.addEventListener('click', () => this.handleBatchDownload());
+        }
+
+        // Student Download Button
+        if (this.downloadStudentBtn) {
+            this.downloadStudentBtn.addEventListener('click', () => this.handleStudentDownload());
+        }
+
+        // Modal Events
+        if (this.modalClose) {
+            this.modalClose.addEventListener('click', () => this.closeDownloadModal());
+        }
+        if (this.modalBackdrop) {
+            this.modalBackdrop.addEventListener('click', () => this.closeDownloadModal());
+        }
+        if (this.cancelDownloadBtn) {
+            this.cancelDownloadBtn.addEventListener('click', () => this.closeDownloadModal());
+        }
+        if (this.confirmDownloadBtn) {
+            this.confirmDownloadBtn.addEventListener('click', () => this.executeDownload());
+        }
 
         // Check for stored cookie
         const storedCookie = window.api.getCookie();
@@ -164,12 +235,18 @@ class K12MediaApp {
             this.connectionStatus.querySelector('.status-text').textContent = '已連接';
             this.searchSection.classList.remove('hidden');
             this.aiSection.classList.remove('hidden');
+            if (this.batchDownloadSection) {
+                this.batchDownloadSection.classList.remove('hidden');
+            }
         } else {
             this.connectionStatus.classList.remove('connected');
             this.connectionStatus.querySelector('.status-text').textContent = '未連接';
             this.searchSection.classList.add('hidden');
             this.viewerSection.classList.add('hidden');
             this.aiSection.classList.add('hidden');
+            if (this.batchDownloadSection) {
+                this.batchDownloadSection.classList.add('hidden');
+            }
         }
     }
 
@@ -182,24 +259,61 @@ class K12MediaApp {
         try {
             // Show loading state in dropdown
             examSelect.innerHTML = '<option>加載考試列表...</option>';
+            if (this.manualExamInput) {
+                this.manualExamInput.classList.add('hidden');
+            }
 
-            const exams = await window.api.getExams();
+            const response = await window.api.getExams();
+            // API returns { exams: [...] } object
+            const exams = response?.exams || response || [];
+
             if (exams && exams.length > 0) {
                 examSelect.innerHTML = exams.map(exam =>
                     `<option value="${exam.id}">${exam.name}</option>`
                 ).join('');
                 // Select the first one by default (usually latest)
                 examSelect.value = exams[0].id;
+                this.currentTestId = exams[0].id;
                 this.showToast(`已加載 ${exams.length} 場考試`, 'success');
             } else {
-                examSelect.innerHTML = '<option value="" disabled>未找到考試</option>';
-                this.showToast('未找到可用考試', 'warning');
+                examSelect.innerHTML = '<option value="" disabled>未找到考試 - 請手動輸入</option>';
+                // Show manual input
+                if (this.manualExamInput) {
+                    this.manualExamInput.classList.remove('hidden');
+                }
+                this.showToast('未找到考試，請手動輸入考試 ID', 'warning');
             }
         } catch (error) {
             console.error('Load exams failed:', error);
-            examSelect.innerHTML = '<option value="" disabled>加載失敗</option>';
-            this.showToast('加載考試列表失敗', 'error');
+            examSelect.innerHTML = '<option value="" disabled>加載失敗 - 請手動輸入</option>';
+            // Show manual input on error
+            if (this.manualExamInput) {
+                this.manualExamInput.classList.remove('hidden');
+            }
+            this.showToast('加載考試列表失敗，請手動輸入', 'error');
         }
+    }
+
+    handleApplyManualExam() {
+        const testId = this.manualTestIdInput?.value.trim();
+        const schoolId = this.manualSchoolIdInput?.value.trim() || '3600';
+
+        if (!testId) {
+            this.showToast('請輸入考試 ID', 'warning');
+            return;
+        }
+
+        // Update the dropdown to show the manual entry
+        this.examSelect.innerHTML = `<option value="${testId}" selected>手動輸入: ${testId}</option>`;
+        this.currentTestId = testId;
+        this.currentSchoolId = parseInt(schoolId);
+
+        // Hide the manual input section
+        if (this.manualExamInput) {
+            this.manualExamInput.classList.add('hidden');
+        }
+
+        this.showToast(`已設置考試 ID: ${testId}`, 'success');
     }
 
     // ========== Student Search ==========
@@ -396,6 +510,158 @@ class K12MediaApp {
             toast.style.animation = 'slideIn 0.25s ease reverse';
             setTimeout(() => toast.remove(), 250);
         }, 3000);
+    }
+
+    // ========== Download Functions ==========
+
+    async handleStudentDownload() {
+        if (!this.currentStudent) {
+            this.showToast('請先搜索學生', 'warning');
+            return;
+        }
+
+        const testId = document.getElementById('examSelect').value;
+        if (!testId) {
+            this.showToast('請選擇考試', 'warning');
+            return;
+        }
+
+        const subjectValue = this.downloadSubjectSelect?.value || 'all';
+        const subjectIds = subjectValue === 'all' ? null : [parseInt(subjectValue)];
+
+        this.showToast('正在準備下載預覽...', 'info');
+
+        try {
+            const result = await window.api.prepareDownload({
+                type: 'student',
+                identifier: this.currentStudent.noInClass || this.currentStudent.name,
+                subjectIds: subjectIds,
+                testId: testId,
+            });
+
+            this.openDownloadModal(result, `${this.currentStudent.name}_試卷`);
+        } catch (error) {
+            this.showToast(`準備下載失敗: ${error.message}`, 'error');
+        }
+    }
+
+    async handleBatchDownload() {
+        if (this.isBatchDownloading) {
+            this.showToast('下載進行中，請稍候...', 'warning');
+            return;
+        }
+
+        const testId = document.getElementById('examSelect').value;
+        if (!testId) {
+            this.showToast('請選擇考試', 'warning');
+            return;
+        }
+
+        // Get selected classes
+        const selectedClasses = [];
+        document.querySelectorAll('#classCheckboxes input[name="class"]:checked').forEach(cb => {
+            selectedClasses.push({
+                classId: parseInt(cb.value),
+                isTeacherClass: cb.dataset.teacher === '1'
+            });
+        });
+
+        if (selectedClasses.length === 0) {
+            this.showToast('請選擇至少一個班級', 'warning');
+            return;
+        }
+
+        const subjectId = parseInt(this.batchSubjectSelect?.value || '2');
+
+        this.showToast('正在準備批量下載...', 'info');
+        this.isBatchDownloading = true;
+
+        try {
+            // For simplicity, download first selected class
+            const firstClass = selectedClasses[0];
+            const result = await window.api.prepareDownload({
+                type: 'class',
+                classId: firstClass.classId,
+                subjectIds: [subjectId],
+                testId: testId,
+                isTeacherClass: firstClass.isTeacherClass,
+            });
+
+            const subjectNames = { 1: '語文', 2: '數學', 3: '英語', 4: '物理', 5: '化學', 6: '生物', 7: '政治', 8: '歷史', 9: '地理' };
+            this.openDownloadModal(result, `班級_${subjectNames[subjectId] || '試卷'}`);
+        } catch (error) {
+            this.showToast(`準備下載失敗: ${error.message}`, 'error');
+        } finally {
+            this.isBatchDownloading = false;
+        }
+    }
+
+    openDownloadModal(downloadData, filename) {
+        this.pendingDownload = {
+            images: downloadData.images,
+            filename: `${filename}_${new Date().toISOString().slice(0, 10)}.zip`
+        };
+
+        // Update summary
+        this.downloadSummary.innerHTML = `
+            <p><strong>學生數量:</strong> ${downloadData.totalStudents} 人</p>
+            <p><strong>圖片數量:</strong> ${downloadData.totalImages} 張</p>
+            <p><strong>文件名:</strong> ${this.pendingDownload.filename}</p>
+        `;
+
+        // Show preview images (limit to first 20 for performance)
+        const previewLimit = 20;
+        const previewData = downloadData.images.slice(0, previewLimit);
+
+        this.previewImages.innerHTML = previewData.map(img => `
+            <div class="preview-image-item">
+                <img src="${window.api.getProxyImageUrl(img.url)}" alt="${img.studentName}" loading="lazy">
+                <div class="preview-label">${img.studentName} - ${img.subjectName}</div>
+            </div>
+        `).join('');
+
+        if (downloadData.images.length > previewLimit) {
+            this.previewImages.innerHTML += `<div class="preview-image-item" style="display:flex;align-items:center;justify-content:center;color:var(--text-secondary);">+${downloadData.images.length - previewLimit} 更多</div>`;
+        }
+
+        // Reset progress
+        this.downloadProgress.classList.add('hidden');
+        this.modalProgressFill.style.width = '0%';
+        this.modalProgressText.textContent = '0%';
+        this.confirmDownloadBtn.disabled = false;
+
+        // Show modal
+        this.downloadModal.classList.remove('hidden');
+    }
+
+    closeDownloadModal() {
+        this.downloadModal.classList.add('hidden');
+        this.pendingDownload = null;
+    }
+
+    async executeDownload() {
+        if (!this.pendingDownload) return;
+
+        this.confirmDownloadBtn.disabled = true;
+        this.downloadProgress.classList.remove('hidden');
+
+        try {
+            await window.api.downloadAsZip(
+                this.pendingDownload.images,
+                this.pendingDownload.filename,
+                (current, total) => {
+                    const percent = Math.round((current / total) * 100);
+                    this.modalProgressFill.style.width = `${percent}%`;
+                    this.modalProgressText.textContent = `${percent}% (${current}/${total})`;
+                }
+            );
+
+            this.showToast('下載完成！', 'success');
+            this.closeDownloadModal();
+        } catch (error) {
+            this.showToast(`下載失敗: ${error.message}`, 'error');
+            this.confirmDownloadBtn.disabled = false;
+        }
     }
 }
 

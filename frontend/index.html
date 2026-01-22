@@ -85,7 +85,30 @@
             <select id="examSelect" class="exam-select">
               <option value="" disabled selected>加載考試列表...</option>
             </select>
+            <button id="refreshExamsBtn" class="btn btn-secondary" title="刷新考試列表">
+              🔄
+            </button>
           </div>
+
+          <!-- 手動輸入考試 ID -->
+          <div id="manualExamInput" class="manual-exam-input hidden">
+            <div class="manual-exam-header">
+              <span class="info-icon">💡</span>
+              <span>找不到考試？手動輸入考試 ID</span>
+            </div>
+            <div class="manual-exam-fields">
+              <div class="input-group-inline">
+                <label for="manualTestId">考試 ID:</label>
+                <input type="text" id="manualTestId" class="form-input small" placeholder="如 119274">
+              </div>
+              <div class="input-group-inline">
+                <label for="manualSchoolId">學校 ID:</label>
+                <input type="text" id="manualSchoolId" class="form-input small" value="3600">
+              </div>
+              <button id="applyManualExamBtn" class="btn btn-primary small">確認</button>
+            </div>
+          </div>
+
           <div class="search-input-group">
             <input type="text" id="searchInput" class="search-input" placeholder="輸入學號 (如 2722134) 或姓名 (如 張三)">
             <button id="searchBtn" class="btn btn-primary">
@@ -97,9 +120,91 @@
         <div id="searchResult" class="search-result"></div>
       </section>
 
+      <!-- Batch Download Section -->
+      <section class="batch-download-section glass-card hidden" id="batchDownloadSection">
+        <h2 class="section-title">📦 批量下載</h2>
+        <p class="section-desc">下載整個班級指定科目的所有答卷圖片</p>
+
+        <div class="batch-form">
+          <div class="batch-row">
+            <div class="class-selector">
+              <label class="selector-label">選擇班級:</label>
+              <div class="class-checkboxes" id="classCheckboxes">
+                <label class="checkbox-item">
+                  <input type="checkbox" name="class" value="91268" data-teacher="0" checked>
+                  <span class="checkbox-label">格物3班 (行政班)</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="class" value="1883835" data-teacher="1">
+                  <span class="checkbox-label">格物3班 (教學班)</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="class" value="91272" data-teacher="0" checked>
+                  <span class="checkbox-label">致知3班 (行政班)</span>
+                </label>
+                <label class="checkbox-item">
+                  <input type="checkbox" name="class" value="1883842" data-teacher="1">
+                  <span class="checkbox-label">致知3班 (教學班)</span>
+                </label>
+              </div>
+            </div>
+
+            <div class="subject-selector">
+              <label class="selector-label">選擇科目:</label>
+              <select id="batchSubjectSelect" class="subject-select">
+                <option value="1">語文</option>
+                <option value="2" selected>數學</option>
+                <option value="3">英語</option>
+                <option value="4">物理</option>
+                <option value="5">化學</option>
+                <option value="6">生物</option>
+                <option value="7">政治</option>
+                <option value="8">歷史</option>
+                <option value="9">地理</option>
+              </select>
+            </div>
+          </div>
+
+          <button id="batchDownloadBtn" class="btn btn-primary batch-btn">
+            <span class="btn-icon">🚀</span>
+            開始下載
+          </button>
+
+          <div id="batchProgress" class="batch-progress hidden">
+            <div class="progress-header">
+              <span id="progressText">正在準備...</span>
+              <span id="progressPercent">0%</span>
+            </div>
+            <div class="progress-bar">
+              <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-details" id="progressDetails"></div>
+          </div>
+        </div>
+      </section>
+
       <!-- Subject Tabs & Images (Hidden until student found) -->
       <section class="viewer-section glass-card hidden" id="viewerSection">
         <div class="student-info" id="studentInfo"></div>
+        <div class="download-actions" id="downloadActions">
+          <div class="download-label">下載試卷:</div>
+          <select id="downloadSubjectSelect" class="download-select">
+            <option value="all">全部科目</option>
+            <option value="1">語文</option>
+            <option value="2">數學</option>
+            <option value="3">英語</option>
+            <option value="4">物理</option>
+            <option value="5">化學</option>
+            <option value="6">生物</option>
+            <option value="7">政治</option>
+            <option value="8">歷史</option>
+            <option value="9">地理</option>
+          </select>
+          <button id="downloadStudentBtn" class="btn btn-secondary">
+            <span class="btn-icon">📥</span>
+            下載當前學生
+          </button>
+        </div>
 
         <div class="subject-tabs" id="subjectTabs">
           <button class="tab-btn active" data-subject="all">全部</button>
@@ -140,6 +245,34 @@
       </section>
     </main>
 
+    <!-- Download Preview Modal -->
+    <div class="modal hidden" id="downloadModal">
+      <div class="modal-backdrop" id="modalBackdrop"></div>
+      <div class="modal-content glass-card">
+        <div class="modal-header">
+          <h3>📥 下載預覽</h3>
+          <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="modal-body" id="downloadPreviewBody">
+          <div class="download-summary" id="downloadSummary"></div>
+          <div class="preview-images" id="previewImages"></div>
+        </div>
+        <div class="modal-footer">
+          <div class="download-progress hidden" id="downloadProgress">
+            <div class="progress-bar">
+              <div class="progress-fill" id="modalProgressFill"></div>
+            </div>
+            <span id="modalProgressText">0%</span>
+          </div>
+          <button id="cancelDownloadBtn" class="btn btn-secondary">取消</button>
+          <button id="confirmDownloadBtn" class="btn btn-primary">
+            <span class="btn-icon">💾</span>
+            確認下載
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Image Lightbox -->
     <div class="lightbox hidden" id="lightbox">
       <button class="lightbox-close" id="lightboxClose">&times;</button>
@@ -155,6 +288,7 @@
     <div class="toast-container" id="toastContainer"></div>
   </div>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
   <script src="js/api.js"></script>
   <script src="js/preview.js"></script>
   <script src="js/ai.js"></script>

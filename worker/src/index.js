@@ -80,6 +80,16 @@ export default {
         return jsonResponse({ subjects: SUBJECT_NAMES });
       }
 
+      // Class students endpoint
+      if (path.match(/^\/api\/class\/\d+\/students$/) && request.method === 'GET') {
+        return await handleClassStudentsRoute(request, env, path);
+      }
+
+      // Download preparation endpoint
+      if (path === '/api/download/prepare' && request.method === 'POST') {
+        return await handleDownloadPrepareRoute(request, env);
+      }
+
       // Health check
       if (path === '/api/health') {
         return jsonResponse({ status: 'ok', timestamp: new Date().toISOString() });
@@ -207,14 +217,142 @@ async function handleProxyImageRoute(request, env) {
   });
 }
 
+async function handleClassStudentsRoute(request, env, path) {
+  const cookie = request.headers.get('X-Cookie');
+  if (!cookie) {
+    return jsonResponse({ error: 'X-Cookie header is required' }, 401);
+  }
+
+  const url = new URL(request.url);
+  const testId = url.searchParams.get('testId');
+  const isTeacherClass = url.searchParams.get('isTeacherClass') === '1';
+
+  if (!testId) {
+    return jsonResponse({ error: 'testId parameter is required' }, 400);
+  }
+
+  // Extract classId from path
+  const matches = path.match(/\/api\/class\/(\d+)\/students/);
+  if (!matches) {
+    return jsonResponse({ error: 'Invalid path' }, 400);
+  }
+
+  const classId = parseInt(matches[1]);
+  const classConfig = CLASSES.find(c => c.classId === classId);
+  const config = classConfig || { classId, isTeacherClass, label: `班級 ${classId}` };
+
+  const allStudents = await fetchAllStudents(cookie, [config], testId, env);
+  return jsonResponse({ students: allStudents, count: allStudents.length });
+}
+
+async function handleDownloadPrepareRoute(request, env) {
+  const cookie = request.headers.get('X-Cookie');
+  if (!cookie) {
+    return jsonResponse({ error: 'X-Cookie header is required' }, 401);
+  }
+
+  const body = await request.json();
+  const { type, identifier, classId, subjectIds, testId, isTeacherClass } = body;
+
+  if (!testId) {
+    return jsonResponse({ error: 'testId is required' }, 400);
+  }
+
+  const subjects = subjectIds && subjectIds.length > 0 ? subjectIds : [1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const result = { images: [], students: [] };
+
+  if (type === 'student') {
+    // Single student download
+    if (!identifier) {
+      return jsonResponse({ error: 'identifier is required for student download' }, 400);
+    }
+
+    const students = await fetchAllStudents(cookie, CLASSES, testId, env);
+    const student = findStudent(students, identifier);
+
+    if (!student) {
+      return jsonResponse({ error: 'Student not found' }, 404);
+    }
+
+    result.students.push({
+      name: student.name,
+      noInClass: student.noInClass,
+      classLabel: student.classLabel,
+    });
+
+    for (const sid of subjects) {
+      const images = await fetchStudentImages(cookie, student, sid, testId, env);
+      for (const img of images) {
+        result.images.push({
+          studentName: student.name,
+          studentNo: student.noInClass,
+          subjectId: sid,
+          subjectName: SUBJECT_NAMES[sid] || `科目${sid}`,
+          pageIndex: img.pageIndex,
+          url: img.url,
+        });
+      }
+    }
+  } else if (type === 'class') {
+    // Class batch download
+    if (!classId) {
+      return jsonResponse({ error: 'classId is required for class download' }, 400);
+    }
+
+    const classConfig = CLASSES.find(c => c.classId === classId);
+    const config = classConfig || { classId, isTeacherClass: isTeacherClass || false, label: `班級 ${classId}` };
+
+    const students = await fetchAllStudents(cookie, [config], testId, env);
+
+    for (const student of students) {
+      result.students.push({
+        name: student.name,
+        noInClass: student.noInClass,
+        classLabel: student.classLabel,
+      });
+
+      for (const sid of subjects) {
+        const images = await fetchStudentImages(cookie, student, sid, testId, env);
+        for (const img of images) {
+          result.images.push({
+            studentName: student.name,
+            studentNo: student.noInClass,
+            subjectId: sid,
+            subjectName: SUBJECT_NAMES[sid] || `科目${sid}`,
+            pageIndex: img.pageIndex,
+            url: img.url,
+          });
+        }
+      }
+    }
+  } else {
+    return jsonResponse({ error: 'type must be "student" or "class"' }, 400);
+  }
+
+  return jsonResponse({
+    totalImages: result.images.length,
+    totalStudents: result.students.length,
+    students: result.students,
+    images: result.images,
+  });
+}
+
 async function handleExamsRoute(request, env) {
   const cookie = request.headers.get('X-Cookie');
   if (!cookie) {
     return jsonResponse({ error: 'X-Cookie header is required' }, 401);
   }
 
-  const exams = await fetchExams(cookie);
-  return jsonResponse({ exams });
+  const url = new URL(request.url);
+  const includeDebug = url.searchParams.get('debug') === '1';
+
+  const result = await fetchExams(cookie, includeDebug);
+
+  if (includeDebug) {
+    return jsonResponse(result);
+  } else {
+    return jsonResponse({ exams: result });
+  }
 }
 
 // Utility function

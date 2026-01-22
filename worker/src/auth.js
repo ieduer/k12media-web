@@ -30,13 +30,24 @@ export async function ssoLogin(username, password) {
         const ssoCookies = extractCookies(initialResponse);
         console.log('SSO initial cookies:', Object.keys(ssoCookies));
 
+        const initialText = await initialResponse.text();
+
+        // Extract dynamic form fields
+        const userNoMatch = initialText.match(/name="userNo"\s+value="([^"]+)"/);
+        const selectStyMatch = initialText.match(/name="select_sty"\s+value="([^"]+)"/);
+
+        const userNo = userNoMatch ? userNoMatch[1] : '29GwbsGX1VhWKDRuTelxyg=='; // Fallback
+        const selectSty = selectStyMatch ? selectStyMatch[1] : '29GwbsGX1VhWKDRuTelxyg=='; // Fallback
+
+        console.log('Extracted form fields:', { userNo, selectSty });
+
         // Step 2: POST login credentials
         const formData = new URLSearchParams({
             'redirecturi': AUTH_REDIRECT_URL,
-            'userNo': '29GwbsGX1VhWKDRuTelxyg==', // Encoded school ID
+            'userNo': userNo,
             'j_username': username,
             'j_password': password,
-            'select_sty': '29GwbsGX1VhWKDRuTelxyg==',
+            'select_sty': selectSty,
         });
 
         const loginResponse = await fetch(SSO_LOGIN_URL, {
@@ -56,10 +67,15 @@ export async function ssoLogin(username, password) {
         // Check for 302 redirect (successful login)
         if (loginResponse.status !== 302) {
             const text = await loginResponse.text();
+            console.log('Login failed response:', text.substring(0, 200));
+
             if (text.includes('密码') || text.includes('password') || text.includes('错误')) {
-                return { success: false, error: '用戶名或密碼錯誤' };
+                // Try to extract exact error message
+                const msgMatch = text.match(/<font color="red">([^<]+)<\/font>/) || text.match(/alert\('([^']+)'\)/);
+                const specificError = msgMatch ? msgMatch[1] : '用戶名或密碼錯誤';
+                return { success: false, error: specificError };
             }
-            return { success: false, error: `登錄失敗: HTTP ${loginResponse.status}` };
+            return { success: false, error: `登錄失敗 (HTTP ${loginResponse.status}): 請檢查賬號密碼或稍後再試` };
         }
 
         // Get redirect URL with token
@@ -129,12 +145,28 @@ export async function ssoLogin(username, password) {
 
 /**
  * Extract cookies from response headers
+ * Cloudflare Workers Headers don't have getAll(), use entries() iterator instead
  */
 function extractCookies(response) {
     const cookies = {};
-    const setCookieHeaders = response.headers.getAll ?
-        response.headers.getAll('Set-Cookie') :
-        [response.headers.get('Set-Cookie')].filter(Boolean);
+    const setCookieHeaders = [];
+
+    // Use Headers iterator to get all Set-Cookie headers
+    for (const [key, value] of response.headers.entries()) {
+        if (key.toLowerCase() === 'set-cookie') {
+            setCookieHeaders.push(value);
+        }
+    }
+
+    // Fallback: try headers.get() if no cookies found via iterator
+    if (setCookieHeaders.length === 0) {
+        const single = response.headers.get('Set-Cookie');
+        if (single) {
+            // Some environments concatenate multiple Set-Cookie with comma
+            // But Set-Cookie values can contain commas (in expires), so be careful
+            setCookieHeaders.push(single);
+        }
+    }
 
     for (const header of setCookieHeaders) {
         if (!header) continue;

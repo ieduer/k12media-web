@@ -137,6 +137,75 @@ class K12MediaAPI {
     async healthCheck() {
         return await this.request('/health');
     }
+
+    /**
+     * Prepare download - get list of images for preview
+     * @param {Object} params - { type: 'student'|'class', identifier?, classId?, subjectIds?, testId, isTeacherClass? }
+     */
+    async prepareDownload(params) {
+        return await this.request('/download/prepare', {
+            method: 'POST',
+            body: JSON.stringify(params),
+        });
+    }
+
+    /**
+     * Get class students
+     * @param {number} classId - Class ID
+     * @param {string} testId - Test ID
+     * @param {boolean} isTeacherClass - Whether this is a teacher class
+     */
+    async getClassStudents(classId, testId, isTeacherClass = false) {
+        return await this.request(`/class/${classId}/students?testId=${testId}&isTeacherClass=${isTeacherClass ? '1' : '0'}`);
+    }
+
+    /**
+     * Download images as ZIP file
+     * @param {Array} images - Array of image objects with url, studentName, subjectName, pageIndex
+     * @param {string} filename - Download filename
+     * @param {Function} onProgress - Progress callback (current, total)
+     */
+    async downloadAsZip(images, filename, onProgress) {
+        const zip = new JSZip();
+        let completed = 0;
+
+        for (const img of images) {
+            try {
+                const proxyUrl = this.getProxyImageUrl(img.url);
+                const response = await fetch(proxyUrl, {
+                    headers: { 'X-Cookie': this.cookie }
+                });
+
+                if (response.ok) {
+                    const blob = await response.blob();
+                    // Create folder structure: studentNo_studentName/subject/page.jpg
+                    const folderPath = `${img.studentNo}_${img.studentName}/${img.subjectName}`;
+                    const fileName = `第${img.pageIndex}頁.jpg`;
+                    zip.file(`${folderPath}/${fileName}`, blob);
+                }
+            } catch (error) {
+                console.error(`Failed to download image: ${img.url}`, error);
+            }
+
+            completed++;
+            if (onProgress) {
+                onProgress(completed, images.length);
+            }
+        }
+
+        // Generate and download ZIP
+        const content = await zip.generateAsync({ type: 'blob' });
+        const url = URL.createObjectURL(content);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        return { success: true, totalImages: images.length };
+    }
 }
 
 // Export singleton instance
