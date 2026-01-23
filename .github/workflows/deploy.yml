@@ -14,7 +14,6 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Setup Node.js
-      
         uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -45,8 +44,13 @@ jobs:
           npx wrangler --version || true
         working-directory: .
 
+      # ✅关键修复：在 Action 环境里显式设置 CLOUDFLARE_API_TOKEN。
+      # 你的报错是：non-interactive env requires CLOUDFLARE_API_TOKEN。
+      # 这通常说明 secrets 没注入 / 名字不对 / token 为空。
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
