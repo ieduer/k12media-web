@@ -12,24 +12,49 @@ jobs:
     name: Deploy Worker
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Setup Node.js
+      
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
           cache-dependency-path: worker/package-lock.json
-      
-      - name: Install dependencies
-        run: npm install
+
+      - name: Install dependencies (worker)
+        run: npm ci
         working-directory: worker
-      
+
+      # ✅ Debug helpers: make failures actionable instead of just "npx exited 1"
+      - name: Debug worker workspace
+        run: |
+          set -euxo pipefail
+          echo "== pwd =="
+          pwd
+          echo "== repo root =="
+          ls -la
+          echo "== worker dir =="
+          ls -la worker
+          echo "== worker package.json =="
+          test -f worker/package.json && cat worker/package.json || true
+          echo "== worker wrangler config candidates =="
+          (test -f worker/wrangler.toml && echo "found worker/wrangler.toml") || echo "missing worker/wrangler.toml"
+          (test -f worker/wrangler.json && echo "found worker/wrangler.json") || echo "missing worker/wrangler.json"
+          (test -f worker/wrangler.jsonc && echo "found worker/wrangler.jsonc") || echo "missing worker/wrangler.jsonc"
+          echo "== wrangler version =="
+          npx wrangler --version || true
+        working-directory: .
+
       - name: Deploy to Cloudflare Workers
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: worker
+          # ✅ Pin Wrangler to v4 to match current Cloudflare tooling
+          wranglerVersion: '4'
+          # ✅ Explicit command so logs are clearer
+          command: deploy
 
   deploy-pages:
     runs-on: ubuntu-latest
@@ -39,12 +64,33 @@ jobs:
       deployments: write
     steps:
       - uses: actions/checkout@v4
-      
+
+      - name: Setup Node.js (frontend)
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # ✅ If your frontend is a buildable app (Vite/React/etc), build it.
+      # ✅ If it's pure static files, this step is skipped automatically.
+      - name: Install dependencies (frontend)
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        run: npm ci
+        working-directory: frontend
+
+      - name: Build (frontend)
+        if: ${{ hashFiles('frontend/package.json') != '' }}
+        run: npm run build
+        working-directory: frontend
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           projectName: k12media-web
-          directory: frontend
+          # ✅ Prefer build output if it exists, otherwise deploy the static frontend folder.
+          directory: ${{ (hashFiles('frontend/dist/**') != '' && 'frontend/dist') || 'frontend' }}
           gitHubToken: ${{ secrets.GITHUB_TOKEN }}
