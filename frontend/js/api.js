@@ -98,9 +98,15 @@ class K12MediaAPI {
 
     /**
      * Get all students
+     * @param {string} testId
+     * @param {Array} classIds - Optional array of additional class IDs to search
      */
-    async getStudents(testId) {
-        return await this.request(`/students?testId=${testId}`);
+    async getStudents(testId, classIds = []) {
+        let endpoint = `/students?testId=${testId}`;
+        if (classIds && classIds.length > 0) {
+            endpoint += `&classIds=${classIds.join(',')}`;
+        }
+        return await this.request(endpoint);
     }
 
     /**
@@ -115,11 +121,15 @@ class K12MediaAPI {
      * @param {string} identifier - Student number or name
      * @param {string|null} testId - Exam ID
      * @param {number|null} subjectId - Optional subject ID (null for all)
+     * @param {Array} classIds - Optional array of additional class IDs to search
      */
-    async getStudentImages(identifier, testId, subjectId = null) {
+    async getStudentImages(identifier, testId, subjectId = null, classIds = []) {
         let endpoint = `/student/${encodeURIComponent(identifier)}/images?testId=${testId}`;
         if (subjectId) {
             endpoint += `&subjectId=${subjectId}`;
+        }
+        if (classIds && classIds.length > 0) {
+            endpoint += `&classIds=${classIds.join(',')}`;
         }
         return await this.request(endpoint);
     }
@@ -140,7 +150,7 @@ class K12MediaAPI {
 
     /**
      * Prepare download - get list of images for preview
-     * @param {Object} params - { type: 'student'|'class', identifier?, classId?, subjectIds?, testId, isTeacherClass? }
+     * @param {Object} params - { type: 'student'|'class', identifier?, classId?, subjectIds?, testId, isTeacherClass?, classIds? }
      */
     async prepareDownload(params) {
         return await this.request('/download/prepare', {

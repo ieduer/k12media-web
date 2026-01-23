@@ -10,7 +10,7 @@
  */
 
 import { validateCookie, ssoLogin } from './auth.js';
-import { fetchAllStudents, findStudent } from './dwr.js';
+import { fetchAllStudents, findStudent, findStudentByNo } from './dwr.js';
 import { fetchStudentImages, proxyImage } from './image.js';
 import { fetchExams } from './exam.js';
 
@@ -20,8 +20,8 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type, X-Cookie',
 };
 
-// Class configuration (from k12media_download_imgs.py)
-const CLASSES = [
+// Default classes
+const DEFAULT_CLASSES = [
   { classId: 91268, isTeacherClass: false, label: '格物3班' },
   { classId: 91272, isTeacherClass: false, label: '致知3班' },
   { classId: 1883835, isTeacherClass: true, label: '格物3班' },
@@ -136,12 +136,25 @@ async function handleStudentsRoute(request, env) {
 
   const url = new URL(request.url);
   const testId = url.searchParams.get('testId');
+  const classIdsParam = url.searchParams.get('classIds');
 
   if (!testId) {
     return jsonResponse({ error: 'testId parameter is required' }, 400);
   }
 
-  const students = await fetchAllStudents(cookie, CLASSES, testId, env);
+  // Determine which classes to search
+  let classesToSearch = [...DEFAULT_CLASSES];
+
+  if (classIdsParam) { // Support dynamic class adding
+    const extraClassIds = classIdsParam.split(',').map(id => parseInt(id));
+    extraClassIds.forEach(id => {
+      if (!classesToSearch.find(c => c.classId === id)) {
+        classesToSearch.push({ classId: id, isTeacherClass: false, label: `班級 ${id}` });
+      }
+    });
+  }
+
+  const students = await fetchAllStudents(cookie, classesToSearch, testId, env);
   return jsonResponse({ students, count: students.length });
 }
 
@@ -161,17 +174,47 @@ async function handleStudentImagesRoute(request, env, path) {
   const url = new URL(request.url);
   const subjectId = url.searchParams.get('subjectId');
   const testId = url.searchParams.get('testId');
+  const classIdsParam = url.searchParams.get('classIds');
 
   if (!testId) {
     return jsonResponse({ error: 'testId parameter is required' }, 400);
   }
 
-  // First, find the student
-  const students = await fetchAllStudents(cookie, CLASSES, testId, env);
-  const student = findStudent(students, identifier);
+  // Prepare configured classes
+  let classesToSearch = [...DEFAULT_CLASSES];
+  if (classIdsParam) {
+    const extraClassIds = classIdsParam.split(',').map(id => parseInt(id));
+    extraClassIds.forEach(id => {
+      if (!classesToSearch.find(c => c.classId === id)) {
+        classesToSearch.push({ classId: id, isTeacherClass: false, label: `班級 ${id}` });
+      }
+    });
+  }
+
+  // 1. Try finding in configured/provided classes
+  const { allStudents: students, debugLogs } = await fetchAllStudents(cookie, classesToSearch, testId, env);
+  let student = findStudent(students, identifier);
+
+  // 2. If not found and identifier looks like a number, try direct lookup
+  if (!student && /^\d+$/.test(identifier)) {
+    try {
+      // Direct lookup using DWR
+      const directInfo = await findStudentByNo(cookie, testId, identifier);
+      if (directInfo) {
+        student = directInfo;
+      }
+    } catch (e) {
+      console.error('Direct lookup failed:', e);
+      debugLogs.push(`Direct lookup failed: ${e.message}`);
+    }
+  }
 
   if (!student) {
-    return jsonResponse({ error: 'Student not found' }, 404);
+    return jsonResponse({
+      error: 'Student not found',
+      searchedClasses: classesToSearch.map(c => c.classId),
+      debugLogs: debugLogs
+    }, 404);
   }
 
   // Fetch images for specified subject or all subjects
@@ -191,7 +234,7 @@ async function handleStudentImagesRoute(request, env, path) {
       name: student.name,
       noInClass: student.noInClass,
       classLabel: student.classLabel,
-      classId: student.classId,
+      classId: student.classId, // Important: Return classId so frontend can learn it
     },
     subjects: result,
   });
@@ -238,7 +281,7 @@ async function handleClassStudentsRoute(request, env, path) {
   }
 
   const classId = parseInt(matches[1]);
-  const classConfig = CLASSES.find(c => c.classId === classId);
+  const classConfig = DEFAULT_CLASSES.find(c => c.classId === classId);
   const config = classConfig || { classId, isTeacherClass, label: `班級 ${classId}` };
 
   const allStudents = await fetchAllStudents(cookie, [config], testId, env);
@@ -267,7 +310,7 @@ async function handleDownloadPrepareRoute(request, env) {
       return jsonResponse({ error: 'identifier is required for student download' }, 400);
     }
 
-    const students = await fetchAllStudents(cookie, CLASSES, testId, env);
+    const students = await fetchAllStudents(cookie, DEFAULT_CLASSES, testId, env);
     const student = findStudent(students, identifier);
 
     if (!student) {
@@ -299,7 +342,7 @@ async function handleDownloadPrepareRoute(request, env) {
       return jsonResponse({ error: 'classId is required for class download' }, 400);
     }
 
-    const classConfig = CLASSES.find(c => c.classId === classId);
+    const classConfig = DEFAULT_CLASSES.find(c => c.classId === classId);
     const config = classConfig || { classId, isTeacherClass: isTeacherClass || false, label: `班級 ${classId}` };
 
     const students = await fetchAllStudents(cookie, [config], testId, env);

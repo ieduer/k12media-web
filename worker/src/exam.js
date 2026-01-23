@@ -53,21 +53,40 @@ function parseExamList(html) {
     const exams = [];
     const debug = {};
 
-    // FIXED: The actual HTML structure is:
-    // <span class="hand" style="cursor: pointer;" onclick="viewTest(121588);">2025-2026学年第一学期高二元培语文-12.17&nbsp;&nbsp;</span>
-    // The onclick is ON the span element, not before a separate span
-    const regex = /<span[^>]*onclick="viewTest\((\d+)\);"[^>]*>([^<]+)<\/span>/g;
+    // FIXED: The actual HTML structure might vary.
+    // robust regex: find `viewTest(12345)` call and match the text inside the tag
+    // Strategy: Look for the function call, capture ID.
+    // Then try to find the label which is usually the text content of the element or nearby.
+
+    // Pattern 1: <span ... onclick="viewTest(12345);"> Exam Name </span>
+    // We match the onclick and the content.
+    const regex = /onclick="viewTest\((\d+)\);"[^>]*>([^<]+)<\/span>/g;
+
+    // Pattern 2: Simple capture of all viewTest calls to ensure we at least get IDs
+    // html might be: <a href="javascript:viewTest(123)">...</a>
+    const fallbackRegex = /viewTest\((\d+)\)/g;
 
     let match;
     let matchCount = 0;
+
+    // Try primary precise regex first
     while ((match = regex.exec(html)) !== null) {
         matchCount++;
         const id = parseInt(match[1]);
-        // Clean up the name: remove &nbsp; and trim
         let name = match[2].trim().replace(/&nbsp;/g, '').replace(/\s+/g, ' ').trim();
+        if (!exams.find(e => e.id === id)) exams.push({ id, name });
+    }
 
-        if (!exams.find(e => e.id === id)) {
-            exams.push({ id, name });
+    // If no exams found, use strict fallback to just get IDs
+    if (exams.length === 0) {
+        while ((match = fallbackRegex.exec(html)) !== null) {
+            matchCount++;
+            const id = parseInt(match[1]);
+            // Try to guess name from surrounding context (not easy with simple regex)
+            // We'll use ID as name if we can't find better
+            if (!exams.find(e => e.id === id)) {
+                exams.push({ id, name: `Exam ${id}` });
+            }
         }
     }
 

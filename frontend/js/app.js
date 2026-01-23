@@ -57,6 +57,14 @@ class K12MediaApp {
         this.currentSchoolId = 3600;
         this.isBatchDownloading = false;
 
+        // Dynamic class discovery
+        this.discoveredClasses = new Map(); // classId -> { label, isTeacherClass }
+        // Pre-populate with default classes
+        this.discoveredClasses.set(91268, { label: '格物3班 (行政班)', isTeacherClass: false });
+        this.discoveredClasses.set(1883835, { label: '格物3班 (教學班)', isTeacherClass: true });
+        this.discoveredClasses.set(91272, { label: '致知3班 (行政班)', isTeacherClass: false });
+        this.discoveredClasses.set(1883842, { label: '致知3班 (教學班)', isTeacherClass: true });
+
         // Download Modal Elements
         this.downloadModal = document.getElementById('downloadModal');
         this.modalBackdrop = document.getElementById('modalBackdrop');
@@ -206,6 +214,7 @@ class K12MediaApp {
             if (result.valid) {
                 window.api.setCookie(cookie);
                 this.setConnected(true);
+                await this.loadExams();
                 this.showToast('認證成功！', 'success');
             } else {
                 this.showToast(result.message || '認證失敗', 'error');
@@ -223,6 +232,8 @@ class K12MediaApp {
             const result = await window.api.validateCookie(cookie);
             if (result.valid) {
                 this.setConnected(true);
+                // Load exams after successful validation
+                await this.loadExams();
             }
         } catch (error) {
             console.error('Stored cookie validation failed:', error);
@@ -335,9 +346,18 @@ class K12MediaApp {
         this.searchBtn.disabled = true;
 
         try {
-            const result = await window.api.getStudentImages(query, testId);
+            // Pass discovered class IDs to help backend find student
+            const classIds = Array.from(this.discoveredClasses.keys());
+            const result = await window.api.getStudentImages(query, testId, null, classIds);
+
             this.studentData = result;
             this.currentStudent = result.student;
+
+            // Check if we discovered a new class
+            if (result.student.classId) {
+                this.handleDiscoveredClass(result.student.classId, result.student.classLabel);
+            }
+
             this.displayStudentInfo(result.student);
             this.processImages(result.subjects);
             this.viewerSection.classList.remove('hidden');
@@ -349,6 +369,35 @@ class K12MediaApp {
         } finally {
             this.searchBtn.disabled = false;
         }
+    }
+
+    handleDiscoveredClass(classId, classLabel) {
+        if (!this.discoveredClasses.has(classId)) {
+            // New class found!
+            this.discoveredClasses.set(classId, {
+                label: classLabel || `班級 ${classId}`,
+                isTeacherClass: false // We assume false for auto-discovered classes
+            });
+            this.showToast(`已發現新班級: ${classLabel}`, 'success');
+
+            // Update UI checkbox
+            this.addBatchDownloadCheckbox(classId, classLabel || `班級 ${classId}`);
+        }
+    }
+
+    addBatchDownloadCheckbox(classId, label) {
+        if (!this.classCheckboxes) return;
+
+        //Check if checkbox already exists
+        if (this.classCheckboxes.querySelector(`input[value="${classId}"]`)) return;
+
+        const labelEl = document.createElement('label');
+        labelEl.className = 'checkbox-item';
+        labelEl.innerHTML = `
+            <input type="checkbox" name="class" value="${classId}" data-teacher="0" checked>
+            <span class="checkbox-label">${label} (新發現)</span>
+        `;
+        this.classCheckboxes.appendChild(labelEl);
     }
 
     displayStudentInfo(student) {
@@ -532,11 +581,13 @@ class K12MediaApp {
         this.showToast('正在準備下載預覽...', 'info');
 
         try {
+            const classIds = Array.from(this.discoveredClasses.keys());
             const result = await window.api.prepareDownload({
                 type: 'student',
                 identifier: this.currentStudent.noInClass || this.currentStudent.name,
                 subjectIds: subjectIds,
                 testId: testId,
+                classIds: classIds // Pass known classes
             });
 
             this.openDownloadModal(result, `${this.currentStudent.name}_試卷`);
