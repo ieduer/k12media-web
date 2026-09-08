@@ -10,6 +10,7 @@
  */
 
 import { validateCookie, ssoLogin } from './auth.js';
+import { reportDiagnostic, sanitizeExamDebug } from './diagnostics.js';
 import { fetchAllStudents, findStudent, findStudentByNo } from './dwr.js';
 import { fetchStudentImages, proxyImage } from './image.js';
 import { fetchExams } from './exam.js';
@@ -97,8 +98,8 @@ export default {
 
       return jsonResponse({ error: 'Not Found' }, 404);
     } catch (error) {
-      console.error('Error:', error);
-      return jsonResponse({ error: error.message }, 500);
+      reportDiagnostic('request_failed');
+      return jsonResponse({ error: '請求失敗，請稍後再試' }, 500);
     }
   },
 };
@@ -204,8 +205,8 @@ async function handleStudentImagesRoute(request, env, path) {
         student = directInfo;
       }
     } catch (e) {
-      console.error('Direct lookup failed:', e);
-      debugLogs.push(`Direct lookup failed: ${e.message}`);
+      reportDiagnostic('dwr_direct_lookup_failed');
+      debugLogs.push('dwr_direct_lookup_failed');
     }
   }
 
@@ -392,7 +393,7 @@ async function handleExamsRoute(request, env) {
   const result = await fetchExams(cookie, includeDebug);
 
   if (includeDebug) {
-    return jsonResponse(result);
+    return jsonResponse({ exams: result.exams, debug: sanitizeExamDebug(result.debug) });
   } else {
     return jsonResponse({ exams: result });
   }

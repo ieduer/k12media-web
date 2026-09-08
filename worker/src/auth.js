@@ -6,6 +6,7 @@
  */
 
 import CryptoJS from 'crypto-js';
+import { reportDiagnostic } from './diagnostics.js';
 
 const SSO_BASE_URL = 'https://sso.k12media.cn';
 const SSO_LOGIN_URL = `${SSO_BASE_URL}/unify/getToken`;
@@ -47,7 +48,7 @@ function generatePageId() {
  */
 export async function ssoLogin(username, password) {
     try {
-        console.log(`Starting SSO login for user: ${username}`);
+        reportDiagnostic('sso_started');
 
         // Step 1: Get initial SSO session to establish JSESSIONID
         const initialResponse = await fetch(`${SSO_LOGIN_URL}?redirecturi=${encodeURIComponent(AUTH_REDIRECT_URL)}`, {
@@ -60,11 +61,11 @@ export async function ssoLogin(username, password) {
         });
 
         let ssoCookies = extractCookies(initialResponse);
-        console.log('SSO initial cookies:', Object.keys(ssoCookies));
+        reportDiagnostic('sso_session_received');
 
         // Step 1.5: Fetch dwr/engine.js to potentially trigger DWRSESSIONID generation by server
         // DWR often embeds the session ID in the engine.js script body: dwr.engine._dwrSessionId = "..."
-        console.log('Fetching engine.js...');
+        reportDiagnostic('sso_engine_requested');
         const engineResponse = await fetch(DWR_ENGINE_URL, {
             method: 'GET',
             headers: {
@@ -77,37 +78,37 @@ export async function ssoLogin(username, password) {
         // Check cookies from engine response
         const engineCookies = extractCookies(engineResponse);
         ssoCookies = { ...ssoCookies, ...engineCookies };
-        console.log('Cookies after engine.js:', Object.keys(ssoCookies));
+        reportDiagnostic('sso_engine_received');
 
         // Check body for embedded session ID
         const engineText = await engineResponse.text();
         const embeddedSessionMatch = engineText.match(/dwr\.engine\._dwrSessionId\s*=\s*"([^"]+)"/);
 
         if (embeddedSessionMatch) {
-            console.log('Found embedded DWRSESSIONID in engine.js:', embeddedSessionMatch[1]);
+            reportDiagnostic('sso_session_embedded');
             ssoCookies.DWRSESSIONID = embeddedSessionMatch[1];
         } else {
-            console.log('No embedded DWRSESSIONID found in engine.js');
+            reportDiagnostic('sso_session_missing');
         }
 
         // Generate DWR Session ID handling
         // If server didn't provide DWRSESSIONID (via cookie or script), we try fallback
         // But for CSRF check, we MUST put this ID in the cookie too
         if (!ssoCookies.DWRSESSIONID) {
-            console.log('Generating fallback DWRSESSIONID');
+            reportDiagnostic('sso_session_fallback');
             ssoCookies.DWRSESSIONID = Date.now().toString();
         }
         const dwrSessionId = ssoCookies.DWRSESSIONID;
         const pageId = generatePageId();
         const scriptSessionId = `${dwrSessionId}/${pageId}`;
 
-        console.log(`DWR Session Config: DWR=${dwrSessionId}, Page=${pageId}, Script=${scriptSessionId}`);
+        reportDiagnostic('sso_session_prepared');
 
         // Step 2: Encrypt credentials
         const encUsername = encrypt(username);
         const encPassword = encrypt(password);
 
-        console.log('Credentials encrypted.');
+        reportDiagnostic('credentials_prepared');
 
         // DWR Payload aligned with dwr.js structure
         // Added httpSessionId back as it is often required even if empty
@@ -127,7 +128,7 @@ export async function ssoLogin(username, password) {
         ].join('\n');
 
         const cookieHeader = formatCookies(ssoCookies);
-        console.log('Sending DWR Request with Cookies:', cookieHeader);
+        reportDiagnostic('sso_check_requested');
 
         const dwrResponse = await fetch(DWR_URL, {
             method: 'POST',
@@ -146,7 +147,7 @@ export async function ssoLogin(username, password) {
         }
 
         const dwrText = await dwrResponse.text();
-        console.log('DWR Response:', dwrText);
+        reportDiagnostic('sso_check_received');
 
         // Parse DWR response to find userId
         // Response format: {userId:3807672,schoolName:"..."} or userId="3807672"
@@ -158,12 +159,11 @@ export async function ssoLogin(username, password) {
         let userNo = '';
         if (userIdMatch) {
             const userId = userIdMatch[1];
-            console.log(`Found userId: ${userId}`);
+            reportDiagnostic('sso_identity_found');
             userNo = encrypt(userId);
         } else {
-            // Return debug info
-            const debugInfo = dwrText.substring(0, 500);
-            return { success: false, error: `DWR Check Failed (Regex miss). Response: ${debugInfo}` };
+            reportDiagnostic('sso_check_unrecognized');
+            return { success: false, error: '無法讀取認證結果，請稍後再試' };
         }
 
         // Step 4: POST login credentials
@@ -175,7 +175,7 @@ export async function ssoLogin(username, password) {
             'select_sty': userNo,
         });
 
-        console.log('Submitting login form...');
+        reportDiagnostic('sso_form_requested');
 
         const loginResponse = await fetch(SSO_LOGIN_URL, {
             method: 'POST',
@@ -194,12 +194,10 @@ export async function ssoLogin(username, password) {
         // Check for 302 redirect (successful login)
         if (loginResponse.status !== 302) {
             const text = await loginResponse.text();
-            console.log('Login failed response (first 200 chars):', text.substring(0, 200));
+            reportDiagnostic('sso_form_rejected');
 
             if (text.includes('密码') || text.includes('password') || text.includes('错误')) {
-                const msgMatch = text.match(/<font color="red">([^<]+)<\/font>/) || text.match(/alert\('([^']+)'\)/);
-                const specificError = msgMatch ? msgMatch[1] : '用戶名或密碼錯誤';
-                return { success: false, error: specificError };
+                return { success: false, error: '用戶名或密碼錯誤' };
             }
             return { success: false, error: `登錄失敗 (HTTP ${loginResponse.status}): 請檢查賬號密碼或稍後再試` };
         }
@@ -207,11 +205,11 @@ export async function ssoLogin(username, password) {
         // Get redirect URL with token
         const redirectUrl = loginResponse.headers.get('Location');
         if (!redirectUrl || !redirectUrl.includes('token=')) {
-            console.error('Login 302 but no token in location:', redirectUrl);
+            reportDiagnostic('sso_token_missing');
             return { success: false, error: '無法獲取認證令牌 (No Token)' };
         }
 
-        console.log('SSO redirect URL found via DWR flow');
+        reportDiagnostic('sso_redirect_received');
 
         // Step 5: Follow redirect to get test.k12media.cn cookies
         const authResponse = await fetch(redirectUrl, {
@@ -226,7 +224,7 @@ export async function ssoLogin(username, password) {
 
         // Extract cookies from auth response
         const authCookies = extractCookies(authResponse);
-        console.log('Auth cookies:', Object.keys(authCookies));
+        reportDiagnostic('sso_auth_received');
 
         // Step 6: Follow any additional redirects
         let currentUrl = authResponse.headers.get('Location');
@@ -262,7 +260,7 @@ export async function ssoLogin(username, password) {
         // Step 7: Fetch test.k12media.cn/tqms/dwr/engine.js to get the correct DWRSESSIONID for the main domain
         // The one we got from SSO domain might not be valid for the test domain DWR calls
         try {
-            console.log('Fetching main domain engine.js to ensure valid DWRSESSIONID...');
+            reportDiagnostic('main_engine_requested');
             const mainEngineResponse = await fetch(`${BASE_URL_MAIN}/tqms/dwr/engine.js`, {
                 method: 'GET',
                 headers: {
@@ -281,21 +279,21 @@ export async function ssoLogin(username, password) {
             const mainEmbeddedMatch = mainEngineText.match(/dwr\.engine\._dwrSessionId\s*=\s*"([^"]+)"/);
 
             if (mainEmbeddedMatch) {
-                console.log('Found main domain DWRSESSIONID:', mainEmbeddedMatch[1]);
+                reportDiagnostic('main_session_embedded');
                 allCookies.DWRSESSIONID = mainEmbeddedMatch[1];
             } else {
-                console.log('No embedded DWRSESSIONID found in main engine.js');
+                reportDiagnostic('main_session_missing');
                 // Use fallback if not found
                 if (!allCookies.DWRSESSIONID) {
                     allCookies.DWRSESSIONID = Date.now().toString();
                 }
             }
         } catch (e) {
-            console.error('Failed to fetch main engine.js:', e);
+            reportDiagnostic('main_engine_failed');
             // Non-fatal, continue with what we have
         }
 
-        console.log('Login success via DWR flow. Cookies:', Object.keys(allCookies));
+        reportDiagnostic('sso_succeeded');
 
         const cookieString = formatCookies(allCookies);
 
@@ -306,8 +304,8 @@ export async function ssoLogin(username, password) {
         };
 
     } catch (error) {
-        console.error('SSO login error:', error);
-        return { success: false, error: `登錄失敗: ${error.message}` };
+        reportDiagnostic('sso_failed');
+        return { success: false, error: '登錄失敗，請稍後再試' };
     }
 }
 
@@ -433,7 +431,8 @@ export async function validateCookie(cookie, env) {
 
         return { valid: false, message: '無法驗證認證狀態' };
     } catch (error) {
-        return { valid: false, message: `驗證失敗: ${error.message}` };
+        reportDiagnostic('cookie_validation_failed');
+        return { valid: false, message: '驗證失敗，請稍後再試' };
     }
 }
 

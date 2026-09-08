@@ -4,6 +4,7 @@
  */
 
 import { extractDwrSessionId, buildHeaders } from './auth.js';
+import { reportDiagnostic } from './diagnostics.js';
 
 const BASE_URL_MAIN = 'https://test.k12media.cn';
 const DWR_STUDENT_LIST_URL = `${BASE_URL_MAIN}/tqms/dwr/call/plaincall/SelectSchoolUtil.findStudentListByClassId.dwr`;
@@ -55,7 +56,6 @@ function decodeDwrUnicode(str) {
 /**
  * Parse DWR response to extract student list
  */
-// Debug parsing
 function parseStudentList(text, classConfig) {
     // Relaxed regex to handle unquoted noInClass
     // Matches: noInClass:12345 or noInClass:"12345"
@@ -76,9 +76,9 @@ function parseStudentList(text, classConfig) {
     }
 
     if (students.length === 0) {
-        console.log(`[dwr] No students parsed for class ${classConfig.classId}. Sample text:`, text.substring(0, 500));
+        reportDiagnostic('dwr_class_empty');
     } else {
-        console.log(`[dwr] Parsed ${students.length} students for class ${classConfig.classId}`);
+        reportDiagnostic('dwr_class_parsed');
     }
 
     return students;
@@ -107,7 +107,7 @@ function parseStudentInfo(text) {
             };
         }
     } catch (e) {
-        console.error('Parse student info failed:', e);
+        reportDiagnostic('dwr_student_parse_failed');
     }
     return null;
 }
@@ -142,8 +142,7 @@ async function fetchStudentsForClass(cookie, classConfig, testId) {
     const text = await response.text();
     const students = parseStudentList(text, classConfig);
 
-    // Return both students and raw text for debugging if empty
-    return { students, rawText: students.length === 0 ? text.substring(0, 1000) : null };
+    return { students };
 }
 
 /**
@@ -185,10 +184,10 @@ export async function fetchAllStudents(cookie, classes, testId, env) {
 
     for (const classConfig of classes) {
         try {
-            const { students, rawText } = await fetchStudentsForClass(cookie, classConfig, testId);
+            const { students } = await fetchStudentsForClass(cookie, classConfig, testId);
 
-            if (rawText) {
-                debugLogs.push(`Class ${classConfig.classId} returned 0 students. Response start: ${rawText}`);
+            if (students.length === 0) {
+                debugLogs.push('dwr_class_empty');
             }
 
             for (const student of students) {
@@ -199,8 +198,8 @@ export async function fetchAllStudents(cookie, classes, testId, env) {
                 }
             }
         } catch (error) {
-            console.error(`Failed to fetch class ${classConfig.classId}:`, error);
-            debugLogs.push(`Class ${classConfig.classId} failed: ${error.message}`);
+            reportDiagnostic('dwr_class_fetch_failed');
+            debugLogs.push('dwr_class_fetch_failed');
         }
     }
 

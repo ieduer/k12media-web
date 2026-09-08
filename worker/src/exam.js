@@ -3,6 +3,7 @@
  */
 
 import { buildHeaders } from './auth.js';
+import { reportDiagnostic, sanitizeExamDebug } from './diagnostics.js';
 
 const BASE_URL_MAIN = 'https://test.k12media.cn';
 const EXAM_LIST_URL = `${BASE_URL_MAIN}/tqms/exam/ExamAction.a?doQuery`;
@@ -15,7 +16,6 @@ const EXAM_LIST_URL = `${BASE_URL_MAIN}/tqms/exam/ExamAction.a?doQuery`;
 export async function fetchExams(cookie, includeDebug = false) {
     const debug = {};
     try {
-        debug.url = EXAM_LIST_URL;
         const response = await fetch(EXAM_LIST_URL, {
             method: 'GET',
             headers: buildHeaders(cookie),
@@ -25,23 +25,24 @@ export async function fetchExams(cookie, includeDebug = false) {
         debug.isRedirect = response.status >= 300 && response.status < 400;
 
         if (!response.ok) {
-            debug.error = `Failed to fetch exam list: ${response.status}`;
-            return includeDebug ? { exams: [], debug } : [];
+            debug.error = 'exam_upstream_http_error';
+            reportDiagnostic('exam_upstream_http_error');
+            return includeDebug ? { exams: [], debug: sanitizeExamDebug(debug) } : [];
         }
 
         const html = await response.text();
         debug.htmlLength = html.length;
-        debug.htmlPreview = html.substring(0, 1500);
         debug.containsLogin = html.includes('login') || html.includes('sso') || html.includes('getToken');
         debug.containsViewTest = html.includes('viewTest');
 
         const parseResult = parseExamList(html);
         debug.parseInfo = parseResult.debug;
 
-        return includeDebug ? { exams: parseResult.exams, debug } : parseResult.exams;
+        return includeDebug ? { exams: parseResult.exams, debug: sanitizeExamDebug(debug) } : parseResult.exams;
     } catch (error) {
-        debug.exception = error.message;
-        return includeDebug ? { exams: [], debug } : [];
+        debug.error = 'exam_fetch_failed';
+        reportDiagnostic('exam_fetch_failed');
+        return includeDebug ? { exams: [], debug: sanitizeExamDebug(debug) } : [];
     }
 }
 
@@ -96,7 +97,6 @@ function parseExamList(html) {
     if (exams.length === 0) {
         const viewTestMatches = html.match(/viewTest\(\d+\)/g);
         debug.viewTestCalls = viewTestMatches ? viewTestMatches.length : 0;
-        debug.sampleViewTestCalls = viewTestMatches ? viewTestMatches.slice(0, 5) : [];
 
         // Look for common exam-related content
         debug.hasExamKeyword = html.includes('exam') || html.includes('考试') || html.includes('測驗');

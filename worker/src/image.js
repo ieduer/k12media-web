@@ -4,6 +4,7 @@
  */
 
 import { buildHeaders } from './auth.js';
+import { reportDiagnostic } from './diagnostics.js';
 
 const BASE_URL_MAIN = 'https://test.k12media.cn';
 const BASE_URL_IMG = 'https://yue.k12media.cn';
@@ -89,7 +90,7 @@ export async function fetchStudentImages(cookie, student, subjectId, testId, env
             proxyUrl: `/api/proxy-image?url=${encodeURIComponent(url)}`,
         }));
     } catch (error) {
-        console.error(`Failed to fetch images for subject ${subjectId}:`, error);
+        reportDiagnostic('image_fetch_failed');
         return [];
     }
 }
