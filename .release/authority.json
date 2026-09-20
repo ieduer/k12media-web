@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "repository": "https://github.com/ieduer/k12media-web",
+  "mode": "source_validation_with_project_promotion_gate",
+  "production_executor": "/Users/ylsuen/CF/scripts/release-worker-transaction.mjs",
+  "reason": "Worker accepted source is codex/k12-diagnostics-privacy-20260908@14fc101681c6f490e051fa33d66d76bf061e4170, not master. Pages source and real external-account acceptance remain unresolved in the project operations authority. No combined Worker/Pages production release may use default master. The private Worker exposure stays unchanged."
+}
