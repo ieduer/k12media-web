@@ -1,5 +1,5 @@
 import { handlePortal } from '../src/student-portal.js';
-import { parseSubjectCall,parseHome } from '../src/student-portal-source.js';
+import { parseSubjectCall,parseHome,extractSubjectResults } from '../src/student-portal-source.js';
 import { seal,unseal,readCookie } from '../src/student-session.js';
 const assert=(ok,msg)=>{if(!ok)throw Error(msg);};
 const origin='https://paper.bdfz.net',env={STUDENT_SESSION_KEY:'fixture-key-with-at-least-32-characters'};
@@ -12,12 +12,12 @@ const dwr=(x,n)=>`dwr.engine.remote.handleCallback("${n}","0",${x});`;
 export default {async fetch(){const tests=[];try{
  let calls=[];
  const fetcher=async(url,init)=>{calls.push({url,init});const p=new URL(url).pathname,q=new URL(url).search;
-  if(p==='/tqweb/login.jsp')return new Response('findUnitOrClassMessage /tqweb/j_acegi_security_check',{headers:{'Set-Cookie':'JSESSIONID=initial; HttpOnly'}});
+  if(p==='/tqweb/login.jsp')return new Response('findUnitOrClassMessage /tqweb/j_acegi_security_check',{headers:[['Set-Cookie','JSESSIONID=initial; HttpOnly'],['Set-Cookie','SERVERID=backend-a|1|1; HttpOnly']]});
   if(p.endsWith('__System.generateId.dwr'))return new Response(dwr('"DWR"',1));
   if(p.endsWith('SelectUserUtil.findUnitOrClassMessage.dwr'))return new Response(dwr('[{type:1,schoolId:900,classId:901,lockTime:new Date(1700000000000),password:"never-output"}]',2));
   if(p.endsWith('j_acegi_security_check')){assert(new URLSearchParams(init.body).get('classId')==='901','source-derived class');return new Response(null,{status:302,headers:{Location:'/tqweb/demo/MainAction.a?loginDispatcher','Set-Cookie':'JSESSIONID=rotated; HttpOnly'}});}
-  assert(init.headers.Cookie==='JSESSIONID=rotated; DWRSESSIONID=DWR','rotated source cookie retained');
-  if(p.endsWith('MainAction.a'))return new Response(home);
+  assert(init.headers.Cookie.includes('JSESSIONID=rotated')&&init.headers.Cookie.includes('DWRSESSIONID=DWR')&&init.headers.Cookie.includes('SERVERID=backend-a|1|'),'rotated source cookie and backend affinity retained');
+  if(p.endsWith('MainAction.a'))return new Response(home,{headers:{'Set-Cookie':'SERVERID=backend-a|1|2; HttpOnly'}});
   if(p.endsWith('ServiceUtil.doModifyCurrentTest.dwr'))return new Response(dwr('true',3));
   if(p.endsWith('NewStudentReport.a'))return new Response(q.includes('doShow')?report:'成绩单');
   if(p.endsWith('SubjectReportSmallPointsAction.a'))return new Response(subjectHtml);
@@ -27,11 +27,15 @@ export default {async fetch(){const tests=[];try{
  const deps={fetcher,limiter:()=>true};
  const r=await handlePortal(req('login',{username:'fixture',password:'fixture'}),env,deps);assert(r.status===200,'login succeeds');const result=await r.json();assert(result.authenticated&&result.exams.length===2&&result.exams[0].title==='预科考试一','own home parsed');assert(!JSON.stringify(result).includes('never-output'),'no source secret in response');tests.push('student auth, rotated cookies, Unicode exams and preparatory school');
  const cookie=r.headers.get('Set-Cookie').split(';')[0];assert(r.headers.get('Set-Cookie').includes('HttpOnly')&&r.headers.get('Set-Cookie').includes('Secure'),'cookie flags');
+ const grades=await handlePortal(new Request(origin+result.exams[0].url.replace('/exam?','/exam-data?'),{headers:{Cookie:cookie}}),env,deps);const gradeData=await grades.json();assert(grades.status===200&&gradeData.subjects[0].score===80&&gradeData.subjects[0].rate===.8&&gradeData.totals.maxScore===100,'grade overview uses source subject scores');
+ const directImages=await handlePortal(new Request(origin+gradeData.subjects[0].imagesUrl,{headers:{Cookie:cookie}}),env,deps);assert(directImages.status===200&&(await directImages.text()).includes('答卷第 1 页'),'overview opens own answer sheets');
+ const edgeScores=await extractSubjectResults('<a href="'+subject.replace("'80'","'0'")+'">zero</a><a href="'+subject.replace("'501'","'502'").replace("'80'","''")+'">missing</a>','101','900');assert(edgeScores[0].score===0&&edgeScores[0].rate===0&&edgeScores[1].score===null&&edgeScores[1].rate===null,'missing grade is distinct from zero');tests.push('grade visualization, zero/missing grades and direct scoped answers');
+ const limited=await handlePortal(req('login',{username:'fixture',password:'fixture'}),env,{...deps,limiter:()=>({allowed:false,retryAfter:37})});assert(limited.status===429&&limited.headers.get('Retry-After')==='37'&&(await limited.json()).code==='login_cooldown','local cooldown is distinct from source rejection');tests.push('local retry-after without credential replay');
  const reportResponse=await handlePortal(new Request(origin+result.exams[0].url,{headers:{Cookie:cookie}}),env,deps);const clean=await reportResponse.text();assert(reportResponse.status===200,'exam report succeeds');assert(!/alert|evil.invalid|<script|<iframe|onerror|javascript:/.test(clean),'unsafe source markup removed');assert(clean.includes('/api/student/subject?ticket=')&&clean.includes('/api/student/asset?ticket='),'source actions rewritten');tests.push('report sanitization and scoped subject/chart capabilities');
  const subjectUrl=clean.match(/href="(\/api\/student\/subject\?ticket=[^"]+)"/)[1];
  const sr=await handlePortal(new Request(origin+subjectUrl,{headers:{Cookie:cookie}}),env,deps);const sh=await sr.text();assert(sr.status===200&&sh.includes('/api/student/images?ticket='),'own image form rewritten');const imageUrl=sh.match(/href="(\/api\/student\/images\?ticket=[^"]+)"/)[1];const ir=await handlePortal(new Request(origin+imageUrl,{headers:{Cookie:cookie}}),env,deps);assert(ir.status===200&&(await ir.text()).includes('答卷第 1 页'),'image viewer succeeds');tests.push('own subject report and answer image viewer');
  let count=calls.length;const noAuth=await handlePortal(new Request(origin+result.exams[0].url),env,deps);assert(noAuth.status===401&&calls.length===count,'unauthenticated blocked before source');
- const session=await unseal(cookie.split('=')[1],env.STUDENT_SESSION_KEY,origin,'session');const other=await seal({...session,nonce:'other'},env.STUDENT_SESSION_KEY,origin);const cross=await handlePortal(new Request(origin+result.exams[0].url,{headers:{Cookie:'__Host-paper-session='+other}}),env,deps);assert(cross.status===401&&calls.length===count,'cross session blocked');
+ const session=await unseal(cookie.split('=')[1],env.STUDENT_SESSION_KEY,origin,'session');assert(session.cookies.includes('SERVERID=backend-a|1|2'),'home affinity rotation persisted');const stale=await seal({...session,cookies:session.cookies.replace(/;? ?SERVERID=[^;]+/, '')},env.STUDENT_SESSION_KEY,origin);const old=await handlePortal(new Request(origin+'/api/student/me',{headers:{Cookie:'__Host-paper-session='+stale}}),env,deps);assert(old.status===401&&calls.length===count,'old affinity-less session cannot silently show an empty catalog');const other=await seal({...session,nonce:'other'},env.STUDENT_SESSION_KEY,origin);const cross=await handlePortal(new Request(origin+result.exams[0].url,{headers:{Cookie:'__Host-paper-session='+other}}),env,deps);assert(cross.status===401&&calls.length===count,'cross session blocked');
  const bad=await handlePortal(new Request(origin+result.exams[0].url+'x',{headers:{Cookie:cookie}}),env,deps);assert(bad.status===401&&calls.length===count,'tampered cap blocked');tests.push('anonymous, cross-student and tampered capabilities denied without source access');
  const csrf=await handlePortal(new Request(origin+'/api/student/login',{method:'POST',headers:{Origin:'https://evil.invalid'},body:'{}'}),env,deps);assert(csrf.status===403,'csrf denied');
  const expired=await seal({...session,exp:1},env.STUDENT_SESSION_KEY,origin);await unseal(expired,env.STUDENT_SESSION_KEY,origin,'session').then(()=>{throw Error('expiry bypass');},()=>{});tests.push('same-origin writes and session expiry enforced');

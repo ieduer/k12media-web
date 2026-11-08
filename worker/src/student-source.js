@@ -1,4 +1,5 @@
 import CryptoJS from 'crypto-js';
+import { updateCookieJar } from './student-cookies.js';
 
 // Verified against the official student's login.jsp on 2026-11-08 UTC.
 // This module implements only the observed pre-login account selection.
@@ -135,10 +136,7 @@ export async function beginStudentLogin({ username, password }, { fetcher = fetc
       const bytes = new Uint8Array(size); let offset=0; for (const chunk of chunks) {bytes.set(chunk,offset);offset+=chunk.length;}
       text = new TextDecoder().decode(bytes);
     } catch (error) { if (error instanceof StudentSourceError) throw error; return failure('source_transport_failed'); }
-    for (const raw of (typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : response.headers.getAll('Set-Cookie'))) {
-      const match = raw.match(/^(JSESSIONID|DWRSESSIONID)=([A-Za-z0-9_.!~+\/-]{1,256})(?:;|$)/);
-      if (match) jar.set(match[1],match[2]);
-    }
+    updateCookieJar(jar, response.headers);
     return text;
   }
   const page = await request('/tqweb/login.jsp');

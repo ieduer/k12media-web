@@ -52,3 +52,12 @@ test('DWR date fields are parsed as data without executing source JavaScript',()
   for(const bad of ['new Date(alert(1))','new Function("return 1")()','new Date("1700000000000")'])
     assert.throws(()=>parseDwrReply(reply.replace('new Date(1700000000000)',bad),2));
 });
+
+test('source affinity survives bootstrap and every account lookup with no extra cookies',async()=>{
+ const replies=[page,reply('"SESSION"'),reply('[{type:1,schoolId:900,classId:901}]',2)];let index=0;
+ const selected=await beginStudentLogin({username:'fixture',password:'fixture'},{fetcher:(url,init)=>{
+  if(index>0)assert.ok(init.headers.Cookie.includes('SERVERID=backend-a|1700000000|1700000001'));
+  const r=new Response(replies[index++]);r.headers.append('Set-Cookie','SERVERID=backend-a|1700000000|1700000001; Path=/; HttpOnly');r.headers.append('Set-Cookie','JSESSIONID=fixture; Path=/');r.headers.append('Set-Cookie','remember_password=must-not-retain; Path=/');return r;
+ }});
+ assert.ok(selected.sourceCookies.includes('SERVERID='));assert.ok(!selected.sourceCookies.includes('remember_password'));
+});

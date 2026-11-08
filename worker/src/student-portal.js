@@ -1,15 +1,25 @@
 import { StudentSourceError } from './student-source.js';
-import { beginStudentLogin,finishStudentLogin,parseHome,sourceRequest,loadExamReport,extractImages,allowedAsset,boundedText } from './student-portal-source.js';
+import { beginStudentLogin,finishStudentLogin,parseHome,sourceRequest,loadExamReport,extractImages,extractImageForm,extractSubjectResults,allowedAsset,boundedText } from './student-portal-source.js';
 import { seal,unseal,sessionCookie,readCookie } from './student-session.js';
 import { renderReport,reportHeaders,escapeHtml,cleanCss } from './student-report.js';
+import { hasAffinity,mergeSourceCookies } from './student-cookies.js';
+import { createLoginLimiter } from './student-login-limit.js';
 const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, private','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
 const json=(v,status=200,extra={})=>new Response(JSON.stringify(v),{status,headers:{...headers,...extra}});
-const attempts=new Map();
-async function limit(request,username){const now=Date.now();for(const[k,v]of attempts)if(v<=now)attempts.delete(k);if(attempts.size>4000)return false;
- const hash=async s=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s))),x=>x.toString(16).padStart(2,'0')).join('');
- const a=await hash(username),ip=await hash(request.headers.get('CF-Connecting-IP')||'local');if(attempts.has(a)||attempts.has(ip))return false;attempts.set(a,now+60000);attempts.set(ip,now+10000);return true;}
+const limit=createLoginLimiter();
 async function readInput(request){const raw=await boundedText(request,16000);try{return JSON.parse(raw);}catch{throw new StudentSourceError('invalid_request',400);}}
-export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={}){
+export async function handlePortal(request,env,deps={}){
+ const context={};
+ const response=await routePortal(request,env,deps,context);
+ if(context.session && context.session.cookies!==context.initialCookies){
+  const token=await seal(context.session,env.STUDENT_SESSION_KEY,new URL(request.url).origin);
+  const changed=new Response(response.body,response);
+  changed.headers.set('Set-Cookie',sessionCookie(token,Math.max(0,Math.floor((context.session.exp-Date.now())/1000))));
+  return changed;
+ }
+ return response;
+}
+async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
  const url=new URL(request.url),route=url.pathname.slice('/api/student/'.length),secret=env.STUDENT_SESSION_KEY,audience=url.origin;
  if(env.STUDENT_LOGIN_TEST_ENABLED==='false')return json({code:'service_unavailable'},503);
  if(!secret)return json({code:'service_unavailable'},503);
@@ -29,7 +39,8 @@ export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={})
     if(digest!==pending.account)throw new StudentSourceError('invalid_selection',400);
     selected=pending.selected;choice=selected.selections[Number(data.choice)];if(!choice)throw new StudentSourceError('invalid_selection',400);
    }else{
-    if(!await limiter(request,data.username))return json({code:'source_rate_limited'},429);
+    const gate=await limiter(request,data.username);
+    if(gate===false||gate.allowed===false){const seconds=gate.retryAfter||60;return json({code:'login_cooldown',retryAfter:seconds},429,{'Retry-After':String(seconds)});}
     phase='account_lookup';selected=await beginStudentLogin(data,{fetcher});choice=selected.selections[0];
     if(selected.selections.length!==1){
      const account=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data.username.trim())))).join(',');
@@ -37,7 +48,7 @@ export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={})
     }
    }
    phase='form_and_home';const login=await finishStudentLogin(data,selected,choice,{fetcher});
-   const session={kind:'session',nonce:crypto.randomUUID(),exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId};
+   const session={kind:'session',nonce:crypto.randomUUID(),exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId,knownExamCount:login.home.exams.length};
    const token=await seal(session,secret,audience);
    // Verification receipt only: never account, password, cookie, or source data.
    console.log(JSON.stringify({event:'student_login_verified',receipt:session.nonce,examCount:login.home.exams.length}));
@@ -46,24 +57,47 @@ export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={})
   if(route==='logout'){if(request.method!=='POST')return json({code:'method_not_allowed'},405);return json({ok:true},200,{'Set-Cookie':sessionCookie('',0)});}
   if(request.method!=='GET')return json({code:'method_not_allowed'},405);
   const session=await unseal(readCookie(request),secret,audience,'session');
-  if(route==='me')return json(await homeResponse(await parseHome(await sourceRequest('/tqweb/demo/MainAction.a?loginDispatcher',session.cookies,{fetcher})),session,secret,audience));
-  if(!['exam','subject','images','asset'].includes(route))return json({code:'not_found'},404);
-  const ticket=await unseal(url.searchParams.get('ticket'),secret,audience,route,session.nonce);
-  const capability=(kind,fields)=>seal({kind,nonce:session.nonce,exp:session.exp,...fields},secret,audience);
-  if(route==='exam')return renderReport(await loadExamReport(session,ticket.examId,{fetcher}),{session,examId:ticket.examId,capability});
-  if(route==='subject'){
-   const html=await sourceRequest('/tqweb/report/SubjectReportSmallPointsAction.a?showSubjectStudentReport',session.cookies,{body:new URLSearchParams({...ticket.fields,schoolIdStr:''}).toString(),fetcher});
-   if(!html.includes('findStudentImgJs'))throw new StudentSourceError('source_report_unavailable');
-   return renderReport(html,{session,examId:ticket.examId,paperId:ticket.fields.paperId,capability});
+  // Sessions minted by the old adapter lack source backend affinity. Re-login
+  // once rather than reporting a different backend's empty catalog as truth.
+  if(!hasAffinity(session.cookies))throw new StudentSourceError('session_expired',401);
+  context.session=session;context.initialCookies=session.cookies;phase=route;
+  if(route==='me'){
+   const home=await parseHome(await sourceRequest('/tqweb/demo/MainAction.a?loginDispatcher',session,{fetcher}));
+   if(!home.exams.length&&session.knownExamCount>0)throw new StudentSourceError('source_catalog_unavailable');
+   return json(await homeResponse(home,session,secret,audience));
   }
-  if(route==='images'){
-   const html=await sourceRequest('/tqweb/report/ShowStudentImgsAction.a?findStudentImgs',session.cookies,{body:new URLSearchParams(ticket.fields).toString(),fetcher});
+  if(!['exam','exam-data','subject','subject-images','images','asset'].includes(route))return json({code:'not_found'},404);
+  const kind=route==='exam-data'?'exam':route==='subject-images'?'subject':route;
+  const ticket=await unseal(url.searchParams.get('ticket'),secret,audience,kind,session.nonce);
+  const capability=(kind,fields)=>seal({kind,nonce:session.nonce,exp:session.exp,...fields},secret,audience);
+  if(route==='exam-data'){
+   const html=await loadExamReport(session,ticket.examId,{fetcher});
+   const parsed=await extractSubjectResults(html,ticket.examId,session.schoolId);
+   const subjects=await Promise.all(parsed.map(async ({fields,...score})=>{
+    const cap=await capability('subject',{examId:ticket.examId,fields});
+    return {...score,reportUrl:'/api/student/subject?ticket='+cap,imagesUrl:'/api/student/subject-images?ticket='+cap};
+   }));
+   const scored=subjects.filter(s=>s.score!==null&&s.maxScore!==null);
+   return json({subjects,totals:{score:scored.reduce((sum,s)=>sum+s.score,0),maxScore:scored.reduce((sum,s)=>sum+s.maxScore,0),published:scored.length},reportUrl:'/api/student/exam?ticket='+url.searchParams.get('ticket')});
+  }
+  if(route==='exam')return renderReport(await loadExamReport(session,ticket.examId,{fetcher}),{session,examId:ticket.examId,capability});
+  let imageFields;
+  if(route==='subject'||route==='subject-images'){
+   const html=await sourceRequest('/tqweb/report/SubjectReportSmallPointsAction.a?showSubjectStudentReport',session,{body:new URLSearchParams({...ticket.fields,schoolIdStr:''}).toString(),fetcher});
+   if(!html.includes('findStudentImgJs'))throw new StudentSourceError('source_report_unavailable');
+   if(route==='subject')return renderReport(html,{session,examId:ticket.examId,paperId:ticket.fields.paperId,capability});
+   imageFields=await extractImageForm(html,ticket.examId,ticket.fields.paperId);
+   if(!imageFields)throw new StudentSourceError('source_images_unavailable',404);
+  }
+  if(route==='images'||route==='subject-images'){
+   const html=await sourceRequest('/tqweb/report/ShowStudentImgsAction.a?findStudentImgs',session,{body:new URLSearchParams(imageFields||ticket.fields).toString(),fetcher});
    const images=await extractImages(html,ticket.examId);if(!images.length)throw new StudentSourceError('source_images_unavailable',404);
    const links=await Promise.all(images.map(async raw=>'/api/student/asset?ticket='+await capability('asset',{examId:ticket.examId,...allowedAsset(raw,ticket.examId)})));
    return new Response('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>我的答卷</title><link rel="stylesheet" href="/css/report.css"></head><body><h1>我的答卷</h1>'+links.map((href,i)=>'<figure><a href="'+escapeHtml(href)+'" download="答卷-'+(i+1)+'"><img class="answer-page" src="'+escapeHtml(href)+'" alt="答卷第 '+(i+1)+' 页" loading="lazy"></a><figcaption>第 '+(i+1)+' 页</figcaption></figure>').join('')+'</body></html>',{headers:reportHeaders});
   }
   const asset=allowedAsset(ticket.url,ticket.examId);if(!asset||asset.type!==ticket.type)throw new StudentSourceError('invalid_asset',403);
   const r=await fetcher(asset.url,{redirect:'manual',signal:AbortSignal.timeout(30000),headers:asset.url.startsWith('https://test.k12media.cn:8000/')?{Cookie:session.cookies}:{},cache:'no-store'});
+  if(asset.url.startsWith('https://test.k12media.cn:8000/'))session.cookies=mergeSourceCookies(session.cookies,r.headers);
   if(!r.ok){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}
   const type=r.headers.get('Content-Type')?.split(';')[0].toLowerCase();
   if(asset.type==='css'){if(type!=='text/css'){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}return new Response(cleanCss(await boundedText(r,512*1024)),{headers:{...headers,'Content-Type':'text/css; charset=utf-8'}});}
@@ -71,7 +105,7 @@ export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={})
   return new Response(r.body,{headers:{...headers,'Content-Type':type,'Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'}});
  }catch(e){const code=e instanceof StudentSourceError?e.code:'source_unavailable';const status=e instanceof StudentSourceError?e.status:502;
   console.log(JSON.stringify({event:'student_request_failed',receipt,phase,code,status}));
-  if(['exam','subject','images'].includes(route))return new Response('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/css/report.css"><p>'+escapeHtml(code==='session_expired'?'登录已过期，请重新登录。':code==='source_images_unavailable'?'源站暂未提供这份答卷。':'暂时无法读取报告，请稍后重新打开。')+'</p>',{status,headers:reportHeaders});
+  if(['exam','subject','subject-images','images'].includes(route))return new Response('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/css/report.css"><p>'+escapeHtml(code==='session_expired'?'登录已过期，请重新登录。':code==='source_images_unavailable'?'源站暂未提供这份答卷。':'暂时无法读取报告，请稍后重新打开。')+'</p>',{status,headers:reportHeaders});
   return json({code,receipt},status);
  }finally{if(data){data.password='';data.username='';}}
 }

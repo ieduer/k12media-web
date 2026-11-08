@@ -249,3 +249,22 @@ One bounded real source login is reserved for hosted candidate acceptance; keep
 its cookie in memory and inspect only aggregates. Do not replay after a terminal
 rejection or uncertain login. Public rollout requires exact pushed source,
 artifact manifest, preview/own-data acceptance and current rollback readback.
+
+## Affinity, school-network login and grade overview candidate — 2026-11-08
+
+Preserve source-issued SERVERID with JSESSIONID/DWRSESSIONID, including rotations
+on later source reads. Old sessions without backend affinity require a normal
+login. An empty reloaded catalog after a known nonempty catalog is an error, not
+a claim that the student has no exams. Same-account cooldown remains60 seconds;
+a shared network allows20 distinct submissions per10 seconds. Local cooldown
+and source429 are distinct, with Retry-After for the former. No automatic
+credential replay or credential database is introduced.
+
+The exam overview uses only subject links in the authenticated student's report.
+It shows published scores, valid maxima, rates, levels and scoped report/answer
+actions; an unpublished score is distinct from zero. New candidates must prove
+all available reports and answer-image bytes on the affected authorized account.
+The preparatory-school user will verify after release, per the user's explicit
+choice; never infer that acceptance from another account or synthetic fixtures.
+Evidence: `/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/completion/`.
+Candidate work is not yet a claim of public acceptance.
