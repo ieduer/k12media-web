@@ -14,10 +14,20 @@ The portal never treats a source redirect as verified student identity.
 
 - Preview route: POST `/api/student/login-check`, exact-origin JSON only,
   bounded input, no-store responses and no raw exceptions or source cookies.
-  Enabled only on a `*.k12media-web.pages.dev` preview host until an embedded
+  Enabled on `paper.bdfz.net` and `*.k12media-web.pages.dev` preview hosts until an embedded
   deadline. CPU cap 100 ms, no storage/AI bindings, no source retries. Browser
   submits once per page; isolate-local hashed account/IP throttling is only a
   preview safeguard and is not a global production limiter.
+
+The user requested the existing custom domain and Mark's current visual style.
+`docs/MARK_STYLE_SOURCE.json` records the observed CSS/font/background hashes.
+Only static design assets are reused; no Mark scripts, teacher controls, keys,
+account data or backend integrations are included. The custom domain routes to
+the source-pinned login-test branch through the existing proxied Pages CNAME.
+This is an explicitly scoped public login-test front door, not acceptance of
+the student exam portal. The existing production deployment and disabled
+teacher Worker remain recoverable; the exact DNS preimage and release receipt
+are held by the workspace `paper-login-test-domain-20261108` configuration channel.
 - Source refusal, lock, network ambiguity, multiple school selection and form
   submission are distinct. `authenticated` is always false in this test.
   Multiple matches require the official source interface; this preview never

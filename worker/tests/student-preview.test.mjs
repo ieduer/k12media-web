@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import CryptoJS from 'crypto-js';
 import { checkStudentLogin, STUDENT_ORIGIN, StudentSourceError } from '../src/student-source.js';
 import { handleStudentPreview } from '../src/student-preview.js';
+import previewApp from '../src/student-preview.js';
 import { mountLogin, describeResult } from '../../frontend/js/student-login.mjs';
 const reply = (data,batch) => `dwr.engine.remote.handleCallback("${batch}","0",${data});`;
 const page = 'findUnitOrClassMessage /tqweb/j_acegi_security_check';
@@ -80,4 +81,10 @@ test('preview limiter blocks a repeated account before another source request',a
   const body={username:'limiter-fixture',password:'fixture'};
   assert.equal((await handleStudentPreview(req(body),allowed,deps)).status,200);
   assert.equal((await handleStudentPreview(req(body),allowed,deps)).status,429);assert.equal(calls,1);
+});
+test('custom paper domain is allowed; teacher and unrelated hosts stay closed',async()=>{
+  for (const [host,status] of [['paper.bdfz.net',400],['mark.bdfz.net',503],['k12media-web.pages.dev',503],['evil.invalid',503]]) {
+    const request=new Request('https://'+host+'/api/student/login-check',{method:'POST',headers:{Origin:'https://'+host,'Content-Type':'application/json'},body:'{}'});
+    const response=await previewApp.fetch(request,allowed);assert.equal(response.status,status,host);
+  }
 });

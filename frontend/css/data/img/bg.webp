@@ -1,0 +1,1015 @@
+<!doctype html>
+<html lang="zh-Hant" data-theme="light">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="description" content="K12Media 全平台控制台 — AI 阅卷 / 试卷查看 / 成绩导出" />
+  <meta name="theme-color" content="#fffdf6" />
+  <title>K12Media 控制台</title>
+  <link rel="icon" href="https://img.bdfz.net/20250503004.webp" type="image/webp" />
+  <link rel="preload" as="font" type="font/woff2"
+        href="./data/fonts/HuWenMingChaoTi.woff2" crossorigin="anonymous" />
+  <link rel="stylesheet" href="./style.css?v=20261108-mainline-v200" />
+  <script>
+    window.__API_BASE__ = "https://api-mark.bdfz.net";
+    window.__APP_VERSION__ = "v2.0.0";
+    window.__ASSET_VERSION__ = "20261108-mainline-v200";
+  </script>
+</head>
+
+<body>
+  <div class="bg"></div>
+
+  <!-- Floating mobile hamburger (no topbar) -->
+  <button class="float-hamburger" id="btnHamburger" type="button" aria-label="切换侧边栏" hidden>☰</button>
+
+  <!-- =========== Login Hero =========== -->
+  <section class="login-hero" id="loginPanel">
+    <div class="login-card">
+      <div class="login-card-side">
+        <h1 class="login-h1">登录 K12Media</h1>
+        <p class="login-lead">阅卷 · 试卷 · 成绩，一站式接管。</p>
+        <ul class="login-bullets">
+          <li>✅ 自动发现 PaperID / FullScore</li>
+          <li>✅ 多模态模型读卷 · OCR 与逐点给分一次完成</li>
+          <li>✅ 满分 / 零分 / 收藏 / 故障 自动归类</li>
+          <li>✅ 试卷高清下载 + Seiue 一键导出</li>
+        </ul>
+      </div>
+      <form id="loginForm" class="login-form" autocomplete="on">
+        <div class="field">
+          <label for="loginUser">用户名</label>
+          <input id="loginUser" type="text" placeholder="平台账号" autocomplete="username" required />
+        </div>
+        <div class="field">
+          <label for="loginPass">密码</label>
+          <input id="loginPass" type="password" placeholder="平台密码" autocomplete="current-password" required />
+        </div>
+        <div class="field">
+          <label for="loginSchool">学校</label>
+          <select id="loginSchool">
+            <option value="303" selected>北京大学附属中学（SiteID=303，默认）</option>
+            <option value="__loading__" disabled>载入更多学校列表…</option>
+            <option value="__manual__">▶ 其他学校（手动输入 SiteID）</option>
+          </select>
+          <div id="loginSiteManualWrap" class="field" hidden style="margin-top:8px">
+            <label for="loginSite">SiteID</label>
+            <input id="loginSite" type="text" value="303" placeholder="例如 303" />
+          </div>
+          <input id="loginSiteHidden" type="hidden" value="303" />
+        </div>
+        <button id="btnLogin" type="submit" class="btn btn-primary full-width">
+          <span class="btn-icon">🔑</span><span>登录</span>
+        </button>
+        <div id="loginMsg" class="msg-box" hidden></div>
+        <p class="login-hint">凭据与 yue.k12media.cn / test.k12media.cn 完全一致；前端不存任何明文。</p>
+      </form>
+    </div>
+  </section>
+
+  <!-- =========== App Shell (Sidebar + Content) =========== -->
+  <div class="app-shell" id="appShell" hidden>
+    <aside class="sidebar" id="sidebar">
+      <div class="create-account-card" id="createAccountCard">
+        <div class="sidebar-brand">
+          <span class="logo">📚</span>
+          <span class="sidebar-brand-title">K12Media</span>
+          <span class="sidebar-brand-sub">v2.0.0</span>
+        </div>
+        <div id="profileBadge" class="profile-card" hidden>
+          <div class="profile-row profile-row-user">
+            <span class="profile-dot"></span>
+            <span class="profile-row-main">
+              <span class="profile-row-label">教师</span>
+              <span id="profileName" class="profile-row-value"></span>
+            </span>
+            <button id="btnLogout" type="button" class="btn-link" title="退出登录">退出</button>
+          </div>
+          <div class="profile-row profile-row-site">
+            <span class="profile-row-ic">🏫</span>
+            <span class="profile-row-main">
+              <span class="profile-row-label">学校</span>
+              <span id="profileSite" class="profile-row-value"></span>
+            </span>
+          </div>
+        </div>
+      </div>
+      <div id="formalWorkspace" class="formal-workspace" hidden>
+        <strong id="formalWorkspaceTitle">正式阅卷</strong>
+        <span id="formalWorkspaceProgress" aria-live="polite"></span>
+        <button id="btnOpenFormal" type="button" class="btn btn-primary">回到正式任务</button>
+      </div>
+      <nav class="side-nav">
+        <button class="side-tab active" data-tab="create"><i class="tab-ic">📝</i><span>创建任务</span></button>
+        <button class="side-tab" data-tab="monitor"><i class="tab-ic">📊</i><span>实时监控</span></button>
+        <button class="side-tab" data-tab="papers"><i class="tab-ic">🖼️</i><span>试卷查看</span></button>
+        <button class="side-tab" data-tab="seiue"><i class="tab-ic">📤</i><span>Seiue 同步</span></button>
+        <button class="side-tab" data-tab="feedback"><i class="tab-ic">🧩</i><span>问题反馈</span></button>
+        <button class="side-tab" data-tab="history"><i class="tab-ic">📋</i><span>历史</span></button>
+      </nav>
+      <div class="sidebar-foot">
+        <button id="btnHardRefresh" type="button" class="btn btn-mini btn-ghost force-refresh-btn" title="清理缓存并重新载入最新版本">强制刷新</button>
+        <button id="btnThemeToggle" type="button" class="btn btn-mini btn-ghost icon-only" title="切换黑白主题" aria-label="切换黑白主题">◐</button>
+      </div>
+    </aside>
+
+    <main class="content" id="content">
+      <button id="btnOpenFormalMobile" type="button" class="btn btn-primary formal-mobile-link" hidden>回到正式任务</button>
+
+      <!-- ============ 创建 ============ -->
+      <section class="panel tab-panel active" id="tab-create">
+        <h2 class="panel-title"><span>🛠️</span><span>创建阅卷任务</span></h2>
+
+        <!-- Step 1: Exam → Paper → Question -->
+        <div class="create-step create-step-target">
+          <div class="step-header">
+            <div class="step-label"><span class="step-num">1</span><span>目标题目</span></div>
+            <button type="button" id="btnRefreshExams" class="btn btn-mini btn-ghost">刷新结构</button>
+          </div>
+          <div class="create-target-grid">
+            <div class="field">
+              <label for="subjectSelect">学科</label>
+              <select id="subjectSelect"><option value="">(登录后自动载入全部学科)</option></select>
+            </div>
+            <div class="field">
+              <label for="paperSelect">卷面</label>
+              <select id="paperSelect"></select>
+            </div>
+            <div class="field">
+              <label>题块</label>
+              <select id="itemGroupMulti"></select>
+            </div>
+            <div class="field">
+              <label>题号 · 满分</label>
+              <select id="itemSelect"></select>
+            </div>
+          </div>
+          <div class="loader-row" id="examLoadingRow" hidden>
+            <span class="spin-sm">⟳</span><span class="hint">正在载入题块…</span>
+          </div>
+          <div id="paperItemRow" hidden></div>
+          <div id="selectedItemBanner" class="info-banner" hidden></div>
+          <div id="permissionBadge" class="permission-badge" hidden></div>
+          <div id="previewSection" class="preview-section" hidden>
+            <div class="preview-header">
+              <span class="preview-label">📋 随机学生题块预览</span>
+              <button type="button" id="btnPreviewRefresh" class="btn btn-mini btn-ghost">🔄 换一份</button>
+            </div>
+            <div id="previewLoading" class="loader-row" hidden>
+              <span class="spin-sm">⟳</span><span class="hint">正在抓取预览…</span>
+            </div>
+            <div id="previewImgWrap" class="preview-img-wrap" hidden>
+              <img id="previewImg" alt="学生答卷预览" />
+            </div>
+            <div id="previewError" class="msg-box error" hidden></div>
+            <div class="preview-confirm-row" id="previewConfirmRow" hidden>
+              <button type="button" id="btnConfirmPreview" class="btn btn-primary">确认题目无误</button>
+              <span id="previewConfirmMsg" class="hint">确认后可填写评分依据。</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: Subject + Template + Rubric -->
+        <div class="create-step create-step-locked" id="rubricStep">
+          <div class="step-label"><span class="step-num">2</span><span>评分依据</span></div>
+          <div id="rubricGateMsg" class="msg-box info">请先确认上方预览图，再填写评分依据。</div>
+          <div class="create-rubric-grid">
+            <div class="field"><label for="tplSubjectSelect">模板学科</label><select id="tplSubjectSelect"></select></div>
+            <div class="field"><label for="templateSelect">评分模板</label><select id="templateSelect"></select></div>
+            <div class="field"><label>当前题目</label>
+              <input id="systemFullScore" type="text" value="—" readonly /></div>
+          </div>
+          <div id="templateSlots" class="template-slots"></div>
+          <div class="field" style="margin-top:10px;max-width:680px">
+            <p class="hint">系统默认模型仅帮助生成评分标准。下方阅卷必须填写您自己的个人 Key。</p>
+          </div>
+          <div class="actions rubric-ai-actions">
+            <button type="button" id="btnGenerateRubric" class="btn btn-mini btn-primary">生成评分标准</button>
+            <span id="rubricAiMsg" class="hint">先填题目和参考答案，生成后可手动修改。</span>
+          </div>
+          <div class="block prompt-review-block" id="promptReviewBlock">
+            <div class="prompt-review-head">
+              <strong>评分标准预览</strong>
+              <span class="hint">会展示给 AI 的评分依据与 OCR 原则，可直接修改。</span>
+            </div>
+            <div class="field"><textarea id="prompt" rows="8"></textarea></div>
+            <div class="actions">
+              <button type="button" id="btnRenderTpl" class="btn btn-mini btn-ghost">重新渲染</button>
+              <button type="button" id="btnConfirmPrompt" class="btn btn-mini btn-success">确认评分标准</button>
+              <span id="promptConfirmMsg" class="hint">确认后才能进入 AI 与执行。</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 3: AI Settings -->
+        <div class="create-step create-step-locked" id="aiStep">
+          <div class="step-label"><span class="step-num">3</span><span>AI 与执行</span></div>
+          <div id="aiGateMsg" class="msg-box info">请先确认评分标准，再选择 AI 与阅卷速度。</div>
+          <div class="ai-config-summary" id="aiConfigSummary"></div>
+          <div class="ai-config-grid">
+            <div class="field">
+              <label for="aiProvider">AI 服务</label>
+              <select id="aiProvider">
+                <option value="gemini" selected>Gemini（Google）</option>
+                <option value="deepseek">DeepSeek（支持图片）</option>
+                <option value="claude">Claude（Anthropic）</option>
+                <option value="openai">OpenAI / GPT</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="aiModel">模型</label>
+              <select id="aiModel">
+                <option value="gemini-3.8-flash" selected>Gemini 3.8 Flash</option>
+                <option value="gemini-4-argon">Gemini 4 Argon</option>
+                <option value="gemini-3.6-flash">Gemini 3.6 Flash</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="thinkingLevel">思考深度</label>
+              <select id="thinkingLevel">
+                <option value="low">low</option>
+                <option value="medium" selected>medium</option>
+                <option value="high">high（较慢）</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="concurrency">并发数</label>
+              <select id="concurrency">
+                <option>1</option><option>2</option><option selected>3</option><option>4</option>
+                <option>5</option><option>6</option><option>7</option><option>8</option>
+                <option>9</option><option>10</option><option>12</option><option>15</option><option>20</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="trialLimit">试评数量</label>
+              <input id="trialLimit" type="number" min="1" value="10" placeholder="10" />
+            </div>
+            <div class="field full">
+              <label for="aiKeys">个人 API Keys <span class="hint">仅用于本任务，多 Key 用逗号分隔</span></label>
+              <input id="aiKeys" type="password" placeholder="粘贴您自己的 Key；多 Key 可自动轮询" autocomplete="new-password" required />
+            </div>
+          </div>
+        </div>
+
+        <div class="create-actions actions-sticky">
+          <div class="create-action-primary create-action-single">
+            <button id="btnTrialStart" class="btn btn-primary">开始阅卷</button>
+          </div>
+        </div>
+        <div id="createMsg" class="msg-box" hidden></div>
+      </section>
+
+      <!-- ============ 监控 ============ -->
+      <section class="panel tab-panel" id="tab-monitor" hidden>
+        <p id="monitorFreshness" class="hint" role="status">等待任务状态…</p>
+        <div id="automaticRecoverySummary" class="msg-box" hidden></div>
+        <div id="formalWorkflowMessage" class="msg-box" role="status" hidden></div>
+        <div id="currentSpeedControls" class="actions" hidden>
+          <label for="runningConcurrency">同时评阅</label>
+          <select id="runningConcurrency" aria-label="同时评阅份数"><option value="1">1 份</option><option value="2">2 份</option><option value="3">3 份</option><option value="4">4 份</option><option value="5">5 份</option><option value="6">6 份</option><option value="7">7 份</option><option value="8">8 份</option><option value="9">9 份</option><option value="10">10 份</option><option value="11">11 份</option><option value="12">12 份</option><option value="13">13 份</option><option value="14">14 份</option><option value="15">15 份</option><option value="16">16 份</option><option value="17">17 份</option><option value="18">18 份</option><option value="19">19 份</option><option value="20">20 份</option></select>
+          <button id="btnApplyConcurrency" type="button" class="btn btn-mini">应用速度</button>
+          <span class="hint">先逐步提速；遇到限流会自动降速，无需另开任务。</span>
+        </div>
+        <h2 class="panel-title"><span>📊</span><span>实时监控</span>
+          <span class="panel-title-actions">
+            <button id="btnResumeCurrent" class="btn btn-mini btn-primary" hidden>继续任务</button>
+            <button id="btnPauseCurrent" class="btn btn-mini btn-warning" hidden>暂停任务</button>
+          </span>
+        </h2>
+
+        <div id="monitorArchiveNotice" class="hint" role="status" hidden>历史任务已归档：原始记录和已有报告保留；仅供查阅，不再继续、重试或改分。</div>
+
+        <!-- Geek terminal HUD -->
+        <details class="block">
+        <summary>运行详情</summary>
+        <div class="geek-hud" id="geekHud">
+          <div class="geek-hud-top">
+            <span class="geek-label" id="geekJobLabel">JOB: —</span>
+            <span class="geek-label" id="geekModelLabel">MODEL: —</span>
+            <span class="geek-label geek-blink" id="geekStatus">● IDLE</span>
+          </div>
+          <div class="geek-progress-row">
+            <span class="geek-tiny">源站同题进度</span>
+            <div class="geek-bar-wrap"><div class="geek-bar" id="geekBar" style="width:0%"></div></div>
+            <span class="geek-tiny" id="geekBarText">0/0</span>
+          </div>
+          <div class="source-progress-meta" id="geekSourceMeta" aria-live="polite">源站尚未实时核验</div>
+          <div class="geek-score-row" id="geekScoreHist"></div>
+        </div>
+        </details>
+
+        <div class="stats-grid">
+          <div class="stat-card stat-success"><div class="stat-value" id="statDone">0</div><div class="stat-label">本次已评分</div></div>
+          <div class="stat-card stat-success"><div class="stat-value" id="statWritten">0</div><div class="stat-label">本次已写分</div></div>
+          <div class="stat-card"><div class="stat-value" id="statBlockScored">—</div><div class="stat-label">本题已评分</div></div>
+          <div class="stat-card"><div class="stat-value" id="statBlockWritten">—</div><div class="stat-label">本题已写分</div></div>
+          <div class="stat-card stat-danger stat-clickable" data-stat-action="failure" role="button" tabindex="0"><div class="stat-value" id="statFail">0</div><div class="stat-label">失败 →</div></div>
+          <div class="stat-card stat-warn stat-clickable" data-stat-action="blocked" role="button" tabindex="0"><div class="stat-value" id="statBlocked">0</div><div class="stat-label">待处理 →</div></div>
+          <div class="stat-card"><div class="stat-value" id="statNoImage">0</div><div class="stat-label">图片待复查</div></div>
+          <div class="stat-card stat-clickable" data-stat-action="full" role="button" tabindex="0"><div class="stat-value" id="statFull">0</div><div class="stat-label">满分 →</div></div>
+          <div class="stat-card stat-clickable" data-stat-action="zero" role="button" tabindex="0"><div class="stat-value" id="statZero">0</div><div class="stat-label">零分 →</div></div>
+          <div class="stat-card"><div class="stat-value" id="statCollect">0</div><div class="stat-label">值得收藏</div></div>
+          <div class="stat-card"><div class="stat-value" id="statPlatform">-</div><div class="stat-label">源站同题进度</div><div class="stat-meta" id="statPlatformMeta">尚未实时核验</div></div>
+          <div class="stat-card"><div class="stat-value" id="statAvg">-</div><div class="stat-label">平均分</div></div>
+          <div class="stat-card"><div class="stat-value" id="statAiLatency">-</div><div class="stat-label">AI 延迟 ms</div></div>
+          <div class="stat-card"><div class="stat-value" id="statLast" style="font-size:0.8em;word-break:break-all">-</div><div class="stat-label">最近事件</div></div>
+        </div>
+
+        <!-- 阅卷时长 -->
+        <div class="timing-grid">
+          <div class="timing-card"><div class="timing-label">起始时间</div><div class="timing-value" id="timeStart">—</div></div>
+          <div class="timing-card"><div class="timing-label">结束时间</div><div class="timing-value" id="timeEnd">—</div></div>
+          <div class="timing-card"><div class="timing-label">阅卷总时长</div><div class="timing-value" id="timeElapsed">—</div></div>
+          <div class="timing-card"><div class="timing-label">平均每份（挂钟）</div><div class="timing-value" id="timePerSheet">—</div></div>
+          <div class="timing-card"><div class="timing-label">平均每份（AI 处理）</div><div class="timing-value" id="timeAiPerSheet">—</div></div>
+        </div>
+
+        <div class="error-handling-panel" id="errorHandlingPanel" hidden>
+          <div class="section-header">
+            <span>异常处理建议</span>
+            <span class="hint" id="errorHandlingSummary">—</span>
+          </div>
+          <div id="errorHandlingList" class="error-handling-list"></div>
+        </div>
+
+        <!-- 得分点命中率（与上方 stats-grid 同款卡片，置顶强调） -->
+        <div class="cards-section" id="pointHitsSection" hidden>
+          <div class="section-header"><span>🎯 分项得分统计</span>
+            <span class="hint"></span></div>
+          <div id="pointHits" class="point-statistics"></div>
+        </div>
+
+        <div class="block" id="questionReportEntry" hidden>
+          <a class="btn btn-primary" id="questionReportLink" href="#" target="_blank" rel="noopener">查看本题报告</a>
+        </div>
+
+        <!-- Update prompt section -->
+        <details class="block" id="updatePromptBlock">
+          <summary>修改评分标准</summary>
+          <div class="field"><textarea id="livePrompt" rows="8" placeholder="填写评分标准…"></textarea></div>
+          <div class="actions">
+            <button id="btnUpdatePrompt" class="btn btn-warning">保存评分标准</button>
+            <span id="updatePromptMsg" class="hint" style="margin-left:8px"></span>
+          </div>
+        </details>
+
+        <div class="cards-section" id="blockedSection" hidden>
+          <div class="section-header"><span>需要您处理</span></div>
+          <div id="blockedList" class="task-cards"></div>
+        </div>
+
+        <details class="events-section">
+          <summary class="section-header">运行记录</summary>
+          <span id="pollInfo" class="poll-status">● 轮询: OFF</span>
+          <button id="btnClearStream" class="btn btn-mini btn-ghost">清空显示</button>
+          <div id="events" class="events-log geek-terminal"></div>
+        </details>
+
+        <div class="cards-section">
+          <div class="section-header"><span>批阅卡片</span>
+            <span class="hint" id="taskCardsFilterHint">最近 30 份 · 点击卡片看 OCR 和判阅</span>
+            <button id="btnClearTaskFilter" type="button" class="btn btn-mini btn-ghost" hidden>显示最近</button></div>
+          <div id="taskCards" class="task-cards"></div>
+        </div>
+
+        <div class="monitor-trial-flow" id="monitorTrialFlow" hidden>
+          <div class="section-header">
+            <span>试评审阅</span>
+            <span class="hint" id="monitorTrialMsg">试评完成后，审阅上方批阅卡片，再决定修改任务信息或开始正式评阅。</span>
+          </div>
+          <div class="actions monitor-trial-actions">
+            <button id="btnEditTrialTask" type="button" class="btn btn-ghost">修改任务信息</button>
+            <button id="btnStartFormalFromTrial" type="button" class="btn btn-success" disabled>开始正式评阅</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 亮点 ============ -->
+      <section class="panel tab-panel" id="tab-highlights" hidden>
+        <h2 class="panel-title"><span>⭐</span><span>卷面亮点</span></h2>
+        <div class="actions">
+          <button class="btn btn-mini" data-hl="all">全部</button>
+          <button class="btn btn-mini" data-hl="full">满分卷</button>
+          <button class="btn btn-mini" data-hl="zero">零分卷</button>
+          <button class="btn btn-mini" data-hl="collectible">值得收藏</button>
+          <button class="btn btn-mini" data-hl="failure">识别故障</button>
+        </div>
+        <div id="hlList" class="task-cards"></div>
+      </section>
+
+      <!-- ============ 试卷回判 ============ -->
+      <section class="panel tab-panel" id="tab-regrade" hidden>
+        <h2 class="panel-title"><span>🔄</span><span>试卷回判（修改评分）</span>
+          <button id="btnRefreshRegrade" class="btn btn-mini btn-ghost">刷新</button></h2>
+        <p class="hint">列出当前 Job 全部任务。只有已提交卡片可改分；提交前强确认原分/新分与原因，写后必须从源站读回一致才算成功。</p>
+        <div class="actions">
+          <input id="regradeJobInput" type="text" placeholder="Job ID（默认当前 job）" />
+          <select id="regradeFilter">
+            <option value="">全部</option>
+            <option value="submitted">仅已提交</option>
+            <option value="full">仅满分</option>
+            <option value="zero">仅零分</option>
+            <option value="failure">仅故障</option>
+            <option value="blocked">仅待处理</option>
+          </select>
+          <button id="btnLoadRegrade" class="btn btn-primary">载入</button>
+        </div>
+        <div id="regradeList" class="task-cards"></div>
+      </section>
+
+      <!-- ============ 试卷查看（整套 Yue 考试 + 学生 + 科目） ============ -->
+      <section class="panel tab-panel papers-panel" id="tab-papers" hidden>
+        <h2 class="panel-title"><span>🖼️</span><span>试卷查看</span></h2>
+
+        <form class="papers-search" id="papersSearchForm" autocomplete="off">
+          <div class="papers-field papers-field-ident">
+            <label for="tqmsIdent">学号 / 姓名</label>
+            <input id="tqmsIdent" type="search" inputmode="search" autocomplete="off"
+                   placeholder="例：20231234 或 张三" enterkeyhint="search" />
+          </div>
+          <div class="papers-field papers-field-whole-exam">
+            <label for="yueWholeExam">整套试卷</label>
+            <select id="yueWholeExam"><option value="">正在读取 Yue 全部考试…</option></select>
+          </div>
+          <div class="papers-field papers-field-subj">
+            <label for="tqmsSubj">科目</label>
+            <select id="tqmsSubj"><option value="">全部</option></select>
+          </div>
+          <button id="btnTqmsLookup" class="btn btn-primary papers-submit" type="submit">
+            <span>🔍</span><span>查询</span>
+          </button>
+        </form>
+
+        <section class="latest-answer-preview" id="latestAnswerPreview">
+          <header class="latest-answer-preview-head">
+            <div>
+              <strong>最新高三考试 · 随机学生整卷</strong>
+              <span id="latestAnswerPreviewMeta" class="hint">正在读取 Yue 实时目录中的最新完整高三考试…</span>
+            </div>
+            <button id="btnRefreshAnswerPreview" type="button" class="btn btn-mini btn-ghost">随机换一批</button>
+          </header>
+          <div id="latestAnswerPreviewStatus" class="msg-box info">登录后自动读取真实学生答卷。</div>
+          <div id="latestAnswerPreviewGrid" class="latest-answer-preview-grid"></div>
+        </section>
+
+        <div id="tqmsResult" class="papers-result"></div>
+
+        <details class="block papers-score-workbench" id="tqmsScoreWorkbench" open>
+          <summary>成绩与报告</summary>
+          <div class="papers-score-controls">
+            <div class="papers-field papers-field-exam">
+              <label for="tqmsExam">考试成绩</label>
+              <select id="tqmsExam"><option value="">正在读取最新考试…</option></select>
+            </div>
+            <div class="papers-field papers-field-scope-axis">
+              <label id="tqmsCohortLabel">届别</label>
+              <div class="tqms-scope-axis">
+                <div id="tqmsCohortSwitch" class="tqms-cohort-switch" role="group" aria-labelledby="tqmsCohortLabel">
+                  <button type="button" data-tqms-cohort="2029" aria-pressed="false">
+                    <strong>2029届</strong>
+                  </button>
+                  <button type="button" data-tqms-cohort="2028" aria-pressed="true">
+                    <strong>2028届</strong>
+                  </button>
+                  <button type="button" data-tqms-cohort="2027" aria-pressed="false">
+                    <strong>2027届</strong>
+                  </button>
+                </div>
+                <select id="tqmsScoreScope" aria-label="分析范围">
+                  <option value="grade" selected>全年级</option>
+                  <option value="class">指定班级</option>
+                  <option value="student">指定学生</option>
+                </select>
+              </div>
+            </div>
+            <div class="papers-field papers-field-classes">
+              <label id="tqmsScoreClassLabel" for="tqmsClassPickerButton">班级范围</label>
+              <div id="tqmsClassPicker" class="tqms-class-picker">
+                <button id="tqmsClassPickerButton" type="button" class="tqms-class-picker-button" aria-haspopup="dialog" aria-expanded="false" aria-controls="tqmsClassPickerPanel">
+                  <span data-tqms-class-summary>正在读取班级…</span>
+                  <strong data-tqms-class-meta>请稍候</strong>
+                  <i aria-hidden="true"></i>
+                </button>
+                <div id="tqmsClassPickerPanel" class="tqms-class-picker-panel" role="dialog" aria-label="选择对比班级" hidden>
+                  <div class="tqms-class-picker-toolbar">
+                    <input id="tqmsClassSearch" type="search" autocomplete="off" placeholder="搜索班级名称" aria-label="搜索班级名称">
+                    <div class="tqms-class-presets" id="tqmsClassPresets"></div>
+                  </div>
+                  <div id="tqmsClassPickerGroups" class="tqms-class-picker-groups"></div>
+                  <div class="tqms-class-picker-footer">
+                    <span id="tqmsClassPickerCount">0 个班</span>
+                    <button id="tqmsClassPickerDone" type="button" class="btn btn-mini btn-primary">完成</button>
+                  </div>
+                </div>
+              </div>
+              <select id="tqmsScoreClass" multiple hidden aria-hidden="true"><option value="">正在读取全年级班级…</option></select>
+            </div>
+            <div class="papers-field" id="tqmsScoreStudentField" hidden>
+              <label for="tqmsScoreStudent">学生</label>
+              <select id="tqmsScoreStudent"><option value="">先选择班级</option></select>
+            </div>
+            <div class="papers-field">
+              <label for="tqmsScoreSubject">科目</label>
+              <select id="tqmsScoreSubject"><option value="1,2,3,4,5,6,7,8,9" selected>全部已发布科目</option></select>
+            </div>
+          </div>
+          <div class="papers-field" style="margin-top:10px;max-width:680px">
+            <label for="tqmsAiKey">Gemini API Key <span class="hint">（仅本次全年级分析请求使用，不保存）</span></label>
+            <input id="tqmsAiKey" type="password" placeholder="粘贴您自己的 Gemini API Key" autocomplete="new-password" />
+          </div>
+          <div class="actions papers-score-actions">
+            <button id="btnTqmsScoreView" type="button" class="btn btn-primary">在线查看</button>
+            <button id="btnTqmsScoreCsv" type="button" class="btn btn-mini btn-ghost" disabled>下载 CSV</button>
+            <button id="btnTqmsScoreMd" type="button" class="btn btn-mini btn-ghost" disabled>下载 Markdown</button>
+            <button id="btnTqmsScoreJson" type="button" class="btn btn-mini btn-ghost" disabled>下载 JSON</button>
+            <button id="btnTqmsReportCatalog" type="button" class="btn btn-mini btn-ghost">全部源站报告</button>
+            <button id="btnTqmsBulkScores" type="button" class="btn btn-mini btn-ghost">同步全年级原始成绩</button>
+            <button id="btnTqmsAiReport" type="button" class="btn btn-mini btn-primary" disabled>Gemini 全年级分析报告</button>
+          </div>
+          <div id="tqmsBulkScoreStatus" class="hint"></div>
+          <div id="tqmsScoreResult" class="papers-score-result"></div>
+          <div id="tqmsAiReportMount" class="papers-reports-stack"></div>
+          <div id="tqmsStudentReportMount" class="papers-reports-stack"></div>
+          <div id="tqmsReportCatalog" class="papers-report-catalog" hidden></div>
+          <div id="tqmsReportDocumentMount" class="papers-reports-stack"></div>
+        </details>
+
+        <details class="block papers-history" id="tqmsLookupHistoryBlock">
+          <summary>📌 最近查询 <span id="tqmsLookupHistoryCount" class="hint"></span></summary>
+          <div class="actions" style="margin-top:6px">
+            <button id="btnTqmsHistoryClear" type="button" class="btn btn-mini btn-ghost">清空</button>
+          </div>
+          <div id="tqmsLookupHistory" class="lookup-history-list"></div>
+        </details>
+
+        <!-- Backend defaults: hidden controls retained so existing JS keeps working
+             without exposing 源站 / 范围 / 班级 / 批量 to the user. -->
+        <div class="papers-hidden-controls" hidden aria-hidden="true">
+          <select id="tqmsClassSelect" multiple size="6"></select>
+          <input id="tqmsClassIds" type="text" value="" />
+          <select id="tqmsCacheMode">
+            <option value="prefer" selected>优先 R2</option>
+            <option value="source">强制源站</option>
+            <option value="refresh">刷新快照</option>
+            <option value="only">只读 R2</option>
+          </select>
+          <select id="tqmsBatchSubj"><option value="">全部</option></select>
+          <button id="btnTqmsLogin" type="button"></button>
+          <button id="btnTqmsClasses" type="button"></button>
+          <button id="btnTqmsCacheStats" type="button"></button>
+          <button id="btnTqmsWarmCache" type="button"></button>
+          <button id="btnTqmsStudentZip" type="button"></button>
+          <button id="btnTqmsBatch" type="button"></button>
+          <button id="btnTqmsZip" type="button" disabled></button>
+          <span id="tqmsAutoStatus" class="hint"></span>
+          <span id="tqmsCacheStatus" class="hint"></span>
+          <span id="tqmsClassNote" class="hint"></span>
+          <div id="tqmsProgress" hidden>
+            <span id="tqmsProgressLabel"></span><span id="tqmsProgressCount"></span>
+            <div id="tqmsProgressBar"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ 收藏 ============ -->
+      <section class="panel tab-panel" id="tab-favourites" hidden>
+        <h2 class="panel-title"><span>📌</span><span>平台收藏</span>
+          <button id="btnRefreshFav" class="btn btn-mini btn-ghost">刷新</button></h2>
+        <div id="favList" class="task-cards"></div>
+        <div class="cards-section" style="margin-top:16px">
+          <div class="section-header"><span>🤖 AI 值得收藏</span>
+            <span class="hint">AI 标记为有代表性的答卷</span></div>
+          <div id="aiCollectList" class="task-cards"></div>
+        </div>
+      </section>
+
+      <!-- ============ 仲裁 ============ -->
+      <section class="panel tab-panel" id="tab-arbitration" hidden>
+        <h2 class="panel-title"><span>⚖️</span><span>仲裁（跨学科强制接管）</span>
+          <button id="btnRefreshArb" class="btn btn-mini btn-ghost">刷新</button></h2>
+
+        <details class="block" open>
+          <summary>① 构造仲裁权限（提取任意学科待仲裁卷）</summary>
+          <div class="grid-3">
+            <div class="field">
+              <label>学科</label>
+              <select id="arbSubjectSelect"><option value="">(请先刷新上方结构)</option></select>
+            </div>
+            <div class="field">
+              <label>卷面</label>
+              <select id="arbPaperSelect"></select>
+            </div>
+            <div class="field">
+              <label>题块</label>
+              <select id="arbItemGroupSelect"></select>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:16px;">
+            <button id="btnArbApply" class="btn btn-warning">⬇️ 强制申领一份仲裁</button>
+            <span id="arbApplyMsg" class="hint" style="margin-left:12px;"></span>
+          </div>
+        </details>
+
+        <div id="arbActiveTask" class="block" hidden>
+          <h3 class="arb-task-head">
+            <span>📝 仲裁处理：任务 <span id="arbTaskId"></span></span>
+            <button id="btnArbBack" class="btn btn-mini btn-ghost">❌ 退回该任务</button>
+          </h3>
+          <div class="grid-2">
+            <div>
+              <img id="arbTaskImg" src="" style="width:100%; border:1px solid var(--line); border-radius:8px; cursor:zoom-in" onclick="if(this.src) openLightbox(this.src, '仲裁答卷')"/>
+            </div>
+            <div>
+              <div id="arbConflictingScores" class="msg-box" style="margin-bottom:16px;"></div>
+              <div class="field">
+                <label>⚖️ 最终判决分数</label>
+                <input id="arbFinalScore" type="number" step="0.5" min="0" placeholder="请输入最终分数..." style="font-size:1.5em; padding:8px;" />
+              </div>
+              <div class="actions">
+                <button id="btnArbSubmit" class="btn btn-primary full-width" style="font-size:1.2em; padding:12px;">✔️ 提交仲裁分数</button>
+              </div>
+              <div id="arbSubmitMsg" class="msg-box" hidden style="margin-top:12px;"></div>
+            </div>
+          </div>
+        </div>
+
+        <details class="block">
+          <summary>② 仲裁系统概览与历史</summary>
+          <div id="sourcePermissions" class="task-cards"></div>
+          <div id="arbSummary" class="stats-grid"></div>
+          <div id="arbList" class="task-cards"></div>
+        </details>
+      </section>
+
+      <!-- ============ Seiue ============ -->
+      <section class="panel tab-panel" id="tab-seiue" hidden>
+        <h2 class="panel-title"><span>📤</span><span>Seiue 成绩册同步</span>
+          <span class="hint" style="margin-left:auto">TQMS → 学生匹配 → Seiue 写入</span>
+        </h2>
+
+        <p class="hint" style="margin-bottom:8px">
+          系统读取当前学期、班级与源考试，核对建议后即可确认。已有连接安全复用；相同成绩不会重复提交。
+        </p>
+
+        <!-- Seiue connection -->
+        <details class="block" id="seiueLoginBlock" open>
+          <summary>Seiue 连接 <span id="seiueConnectionStatus" class="hint">正在检查已有连接…</span></summary>
+          <div class="grid-3">
+            <div class="field"><label>帐号</label>
+              <input id="seiueEmail" type="text" autocomplete="username" placeholder="Seiue 帐号" /></div>
+            <div class="field"><label>密码</label>
+              <input id="seiuePass" type="password" autocomplete="current-password" placeholder="Seiue 密码" /></div>
+            <div class="field"><label>&nbsp;</label>
+              <button id="btnSeiueLogin" class="btn btn-primary full-width">🔑 登录 Seiue</button></div>
+          </div>
+        </details>
+
+        <button id="btnSeiueReconnect" class="btn btn-secondary" type="button" hidden>重新读取 Seiue 目录</button>
+        <div id="seiueSuggestions" class="block" aria-live="polite"><p class="hint">正在读取现有连接与可同步项目…</p></div>
+        <!-- Manual controls remain available for ambiguous matches. -->
+        <details class="block" id="seiueManualTarget">
+          <summary>手动调整成绩目标</summary>
+          <div class="grid-2">
+            <div class="field"><label>Seiue 班级</label>
+              <select id="seiueKlassClassSelect"></select>
+              <input id="seiueKlassClassId" type="hidden" value="" /></div>
+            <div class="field"><label>成绩录入项目</label>
+              <select id="seiueKlassItemSelect"></select>
+              <input id="seiueKlassItemId" type="hidden" value="" /></div>
+            <div class="field full">
+              <button id="btnSeiueLoadStu" class="btn btn-primary full-width">✅ 确认写入目标</button>
+            </div>
+            <div class="field full"><label>学期</label><select id="seiueSemester"></select></div>
+            <select id="seiuePaper" hidden></select>
+            <select id="seiueItem" hidden></select>
+            <div class="field full"><span id="seiueTargetPreview"></span></div>
+            <div class="field full"><span id="seiueStuPreview"></span></div>
+          </div>
+        </details>
+
+        <!-- ③ TQMS 源站成绩册 -->
+        <details class="block is-disabled" id="seiueSourceBlock" open>
+          <summary>查看或调整源考试、科目与班级</summary>
+          <div class="actions" style="margin-top:6px;margin-bottom:6px">
+            <button id="btnSeiueLoadSource" type="button" class="btn btn-mini btn-ghost" disabled>🔄 刷新源站</button>
+            <span id="seiueTqmsStatus" class="hint">请先确认 Seiue 写入目标。</span>
+          </div>
+          <div class="grid-2">
+            <div class="field full">
+              <label>考试</label>
+              <select id="seiueSourceExam" disabled></select>
+            </div>
+            <div class="field full">
+              <label>源站班级 <span class="hint">自动匹配；不选则核查全部可读班级</span></label>
+              <select id="seiueSourceClasses" multiple size="6" disabled></select>
+            </div>
+            <div class="field"><label>科目</label>
+              <select id="seiueSourceSubject" disabled><option value="1">语文 (1)</option></select></div>
+            <div class="field"><label>&nbsp;</label>
+              <button id="btnSeiueBridgePreview" class="btn btn-primary full-width" disabled>⬇️ 拉取并匹配</button></div>
+          </div>
+        </details>
+
+        <details class="block" open>
+          <summary>③ 核查并同步</summary>
+          <div class="actions seiue-actions-export">
+            <span class="actions-label">导出</span>
+            <button id="btnSeiueDownloadJson" class="btn btn-mini btn-ghost" disabled title="导出当前核查表、TQMS 小分、Seiue 匹配与写入对照">📦 核查明细 JSON</button>
+            <button id="btnSeiueDownloadMd" class="btn btn-mini btn-ghost" disabled title="导出当前核查表、TQMS 小分、Seiue 匹配与写入对照">📄 核查明细 Markdown</button>
+          </div>
+          <div class="actions seiue-actions-main">
+            <button id="btnSeiueBridgeImport" class="btn btn-success" disabled>同步并核验</button>
+            <button id="btnSeiueBridgeVerify" class="btn btn-ghost" disabled>只读核验</button>
+            <button id="btnSeiueReceipt" class="btn btn-ghost" disabled>下载核验结果</button>
+          </div>
+        </details>
+
+        <div id="seiueResult" class="msg-box" hidden></div>
+
+        <div class="cards-section">
+          <div class="section-header">
+            <span>核查与修改（拉取后展示）</span>
+            <span class="hint" id="seiueBridgeSummary"></span>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table" id="seiueBridgeTable"></table>
+          </div>
+        </div>
+
+        <details class="block" id="seiueHistoryBlock">
+          <summary>历史推送 <span class="hint" id="seiueHistoryCount" style="margin-left:6px"></span></summary>
+          <div class="actions" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+            <input id="seiueHistoryFilter" type="search" placeholder="按学生/班级/科目筛选…" style="flex:1;min-width:160px" />
+            <select id="seiueHistoryHeight" title="高度" style="max-width:130px">
+              <option value="240">折叠 (240px)</option>
+              <option value="420" selected>常规 (420px)</option>
+              <option value="640">较高 (640px)</option>
+              <option value="0">完全展开</option>
+            </select>
+            <button id="btnSeiueHistoryRefresh" class="btn btn-mini btn-ghost" type="button">🔄 刷新</button>
+          </div>
+          <div id="seiueHistoryScroll" class="history-scroll" style="max-height:420px;overflow:auto;margin-top:8px">
+            <div id="seiueHistory" class="history-list"></div>
+          </div>
+        </details>
+      </section>
+
+      <!-- ============ 历史 ============ -->
+      <section class="panel tab-panel" id="tab-secretmap" hidden>
+        <h2 class="panel-title"><span>🔑</span><span>密号 ↔ 学号 台账</span></h2>
+        <p class="hint">密号与学号 / 姓名 / 考号的对应关系持久留存，独立于评阅历史；折叠往期不影响此处，随时可核。</p>
+        <div class="grid-2" style="margin-bottom:10px">
+          <div class="field">
+            <label>试卷 PaperID <span class="hint">（留空 = 全部）</span></label>
+            <input id="secretMapPaperId" type="text" inputmode="numeric" placeholder="如 48229" autocomplete="off" />
+          </div>
+          <div class="field">
+            <label>搜索 <span class="hint">（密号 / 学号 / 姓名 / 考号）</span></label>
+            <input id="secretMapQuery" type="text" placeholder="输入关键字后回车" autocomplete="off" />
+          </div>
+        </div>
+        <div class="actions" style="margin-bottom:10px; gap:8px; flex-wrap:wrap">
+          <button class="btn btn-primary" id="btnSecretMapSearch">🔍 查询</button>
+          <button class="btn btn-ghost" id="btnSecretMapSync">🔄 从源站同步本卷</button>
+          <button class="btn btn-mini btn-ghost" id="btnSecretMapCsv">⬇ 导出 CSV</button>
+          <span class="hint" id="secretMapStatus"></span>
+        </div>
+        <div id="secretMapResult" class="secretmap-result"></div>
+      </section>
+
+      <section class="panel tab-panel" id="tab-feedback" hidden>
+        <h2 class="panel-title">问题反馈 · 聊天</h2>
+        <p class="hint">这里的消息与截图对所有登录用户可见，站长可以直接回复。发送前请遮住学生姓名、成绩与凭据。聊天记录持续保留，旧私人反馈仍保持原权限。</p>
+        <div class="section-header"><strong id="feedbackListTitle">大家的消息</strong><span id="feedbackListHint" class="hint"></span>
+          <button id="btnFeedbackArchive" class="btn btn-mini btn-ghost" type="button">查看旧反馈归档</button>
+          <button id="btnRefreshFeedback" class="btn btn-mini btn-ghost" type="button">刷新</button>
+        </div>
+        <button id="btnFeedbackOlder" class="btn btn-mini btn-ghost" type="button" hidden>查看更早消息</button>
+        <div id="feedbackList" class="chat-history" role="log" aria-live="polite" aria-relevant="additions"></div>
+        <div id="feedbackComposer" class="chat-composer">
+          <div><span id="feedbackReplyHint" class="hint"></span><button id="btnFeedbackCancelReply" type="button" class="btn btn-mini btn-ghost">取消引用</button></div>
+          <label for="feedbackText">消息</label><textarea id="feedbackText" rows="3" maxlength="4000" placeholder="说明遇到的问题，站长和其他用户都能参与。⌘ / Ctrl + Enter 发送"></textarea>
+          <div class="actions"><label class="btn btn-ghost" for="feedbackScreenshot">附加截图</label><input id="feedbackScreenshot" type="file" accept="image/png,image/jpeg,image/webp" />
+            <button id="btnSubmitFeedback" class="btn btn-primary" type="button">发送</button></div>
+        </div>
+        <p id="feedbackStatus" class="hint" role="status"></p>
+      </section>
+
+      <section class="panel tab-panel" id="tab-history" hidden>
+        <section data-admin-only="ledger" hidden class="block">
+          <button id="btnOpenImageArchive" type="button" class="btn btn-mini btn-ghost">历史图片归档</button>
+          <div id="imageArchiveLink" class="hint">已归档原图在私有 Google Drive 查阅；任务、评分与报告保留。</div>
+        </section>
+        <h2 class="panel-title"><span>📋</span><span>历史任务</span>
+          <span class="panel-title-actions">
+            <button id="btnRefreshHistory" class="btn btn-mini btn-ghost">刷新</button>
+            <button id="btnMarkNewRound" class="btn btn-mini btn-ghost" title="把当前及更早的任务折叠为往期，新一轮从此刻起单独显示">🔖 标记新一轮</button>
+            <button id="btnShowAllRounds" class="btn btn-mini btn-ghost" title="取消折叠，显示全部历史">↺ 显示全部</button>
+          </span></h2>
+        <div class="history-controls">
+          <label class="history-control">
+            <span>分组</span>
+            <select id="historyGroupBy">
+              <option value="time">按时间</option>
+              <option value="owner">按人</option>
+              <option value="event">按事件</option>
+              <option value="question">按题目</option>
+            </select>
+          </label>
+          <label class="history-control">
+            <span>筛选</span>
+            <input id="historyFilter" type="search" placeholder="用户 / 题号 / 卷名 / job" autocomplete="off" />
+          </label>
+        </div>
+        <div id="history" class="history-list"></div>
+      </section>
+
+    </main>
+  </div>
+
+  <!-- =========== Compare Modal =========== -->
+  <div class="modal-backdrop" id="compareModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>🔬 多模型对比评阅</span>
+        <button class="btn-link" id="compareClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="hint">选择其他模型对同一张试卷图片进行对比评阅，结果仅展示不提交。</p>
+        <div id="compareProviders">
+          <div class="compare-provider-row">
+            <select class="cmp-provider"><option value="gemini">Gemini</option><option value="claude">Claude</option><option value="openai">OpenAI</option></select>
+            <input class="cmp-model" type="text" placeholder="模型名" value="gemini-3.6-flash" />
+            <input class="cmp-key" type="password" placeholder="API Key" />
+          </div>
+        </div>
+        <div class="actions" style="margin-top:8px">
+          <button class="btn btn-mini btn-ghost" id="compareAddRow">＋ 再加一个</button>
+          <button class="btn btn-primary" id="compareRun">▶ 开始对比</button>
+        </div>
+        <div id="compareResult" class="task-cards" style="margin-top:12px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="issueModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>⚠️ 阅卷任务需要处理</span>
+        <button class="btn-link" id="issueClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="issueText" class="msg-box warning"></div>
+        <div class="actions" style="margin-top:12px; flex-wrap:wrap">
+          <div class="field full issue-key-field" hidden>
+            <label>任务创建者的 API Key <span class="hint">更换后点击下方按钮继续原任务</span></label>
+            <input id="issueAiKeys" type="password" placeholder="填写有效的新 Key" autocomplete="new-password" />
+          </div>
+          <button class="btn btn-warning" id="issuePauseAndMonitor">暂停并处理</button>
+          <button class="btn btn-primary" id="issueSaveKeysRetry">保存 Key 并继续</button>
+          <button class="btn btn-ghost" id="issueGoFeedback">提交问题反馈</button>
+          <button class="btn btn-ghost" id="issueDismiss">仅关闭提示</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="trialCompleteModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>试评完成</span>
+        <button class="btn-link" id="trialCompleteClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="trialCompleteText" class="msg-box success"></div>
+        <div class="actions" style="margin-top:12px; flex-wrap:wrap">
+          <button class="btn btn-primary" id="trialReviewNow">审阅试评</button>
+          <button class="btn btn-ghost" id="trialEditTask">修改任务信息</button>
+          <button class="btn btn-success" id="trialStartFormal">开始正式评阅</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="completionModal" hidden>
+    <div class="modal-card">
+      <div class="modal-header">
+        <span>任务完成</span>
+        <button class="btn-link" id="completionClose">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="completionText" class="msg-box success"></div>
+        <div class="actions" style="margin-top:12px; flex-wrap:wrap">
+          <a class="btn btn-primary" id="completionReport" target="_blank" rel="noopener">下载报告</a>
+          <a class="btn btn-ghost" id="completionSlideBrief" target="_blank" rel="noopener">下载本题汇报</a>
+          <button class="btn btn-ghost" id="completionDismiss">关闭</button>
+        </div>
+        <div class="hint" style="margin-top:8px">本题汇报已合并同题任务数据；原始报告仍可下载后交给 NotebookLM、Gemini 或其他 AI 继续制作课件。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="taskReviewModal" hidden>
+    <div class="modal-card task-review-card">
+      <div class="modal-header task-review-header">
+        <div>
+          <span id="taskReviewTitle">批阅详情</span>
+          <div class="task-review-header-meta">
+            <span id="taskReviewStatus" class="pill pill-info">—</span>
+            <span id="taskReviewProvider" class="hint">—</span>
+          </div>
+        </div>
+        <div class="task-review-score-badge" aria-label="最终得分">
+          <strong id="taskReviewScoreValue">—</strong><span>/</span><span id="taskReviewScoreMax">—</span>
+        </div>
+        <button class="btn-link" id="taskReviewClose">✕</button>
+      </div>
+      <div class="modal-body task-review-body">
+        <div class="task-review-image-column">
+          <section class="task-review-section task-review-whole-paper">
+            <div class="task-review-section-title task-review-whole-paper-title">
+              <span>完整试卷</span>
+              <button id="taskReviewWholePaper" type="button" class="btn btn-mini btn-primary">查看整卷</button>
+            </div>
+            <div id="taskReviewWholePaperStatus" class="hint">按当前任务的学生识别码读取完整物理页。</div>
+            <div id="taskReviewWholePaperPages" class="task-review-whole-paper-pages" hidden></div>
+          </section>
+          <div class="task-review-image-wrap"><img id="taskReviewImg" alt="答卷原图" /></div>
+          <section class="task-review-section task-review-ocr">
+            <div class="task-review-section-title">OCR 识别</div>
+            <div id="taskReviewOcr" class="task-review-copy">—</div>
+          </section>
+        </div>
+        <div class="task-review-detail">
+          <section class="task-review-score-editor" id="taskReviewScoreEditor" hidden>
+            <div class="task-review-score-head">
+              <div><span>当前源站分数</span><strong id="taskReviewCurrentScore">—</strong></div>
+              <span id="taskReviewScoreEligibility" class="hint">正在核对是否可改分…</span>
+            </div>
+            <div class="task-review-score-form">
+              <label for="taskReviewNewScore">改为</label>
+              <input id="taskReviewNewScore" type="number" min="0" step="0.5" inputmode="decimal" />
+              <label for="taskReviewReason">改分原因</label>
+              <input id="taskReviewReason" type="text" maxlength="240" placeholder="必填：说明人工复核依据" />
+              <button id="taskReviewRegrade" type="button" class="btn btn-warning" disabled>核对并提交改分</button>
+            </div>
+            <div id="taskReviewRegradeStatus" class="hint"></div>
+          </section>
+          <section class="task-review-section task-review-points-section">
+            <div class="task-review-section-title">得分点</div>
+            <div id="taskReviewPoints" class="task-review-points"></div>
+          </section>
+          <section class="task-review-section task-review-overall-section">
+            <div class="task-review-section-title">总评</div>
+            <div id="taskReviewOverall" class="task-review-copy">—</div>
+          </section>
+          <div id="taskReviewFlags" class="task-review-flags" aria-label="任务标签"></div>
+          <details class="task-review-technical" id="taskReviewTechnical">
+            <summary>技术信息与源站回执</summary>
+            <pre id="taskReviewRaw">—</pre>
+          </details>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop owner-notice-backdrop" id="ownerNoticeModal" hidden>
+    <div class="modal-card owner-notice-card" role="dialog" aria-modal="true" aria-labelledby="ownerNoticeTitle" aria-describedby="ownerNoticeBody">
+      <div class="modal-header owner-notice-header">
+        <span id="ownerNoticeTitle">系统通知</span>
+      </div>
+      <div class="modal-body owner-notice-content">
+        <div id="ownerNoticeBody" class="owner-notice-body"></div>
+        <div id="ownerNoticeStatus" class="owner-notice-status" aria-live="polite"></div>
+        <button id="ownerNoticeAcknowledge" type="button" class="btn btn-primary owner-notice-action">我已阅读，继续阅卷</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========== Lightbox =========== -->
+  <div class="lightbox" id="lightbox" hidden>
+    <button class="lightbox-close" id="lightboxClose" aria-label="关闭">✕</button>
+    <button class="lightbox-zoom" id="lightboxZoomIn" aria-label="放大">＋</button>
+    <button class="lightbox-zoom-out" id="lightboxZoomOut" aria-label="缩小">−</button>
+    <button class="lightbox-reset" id="lightboxReset" aria-label="原始大小">100%</button>
+    <button class="lightbox-prev" id="lightboxPrev" aria-label="上一张" hidden>‹</button>
+    <button class="lightbox-next" id="lightboxNext" aria-label="下一张" hidden>›</button>
+    <div class="lightbox-frame"><img id="lightboxImg" alt="" /></div>
+    <div class="lightbox-meta" id="lightboxMeta"></div>
+  </div>
+
+  <!-- =========== Mobile Bottom Nav =========== -->
+  <nav class="bottom-nav" id="bottomNav" hidden>
+    <button class="bnav-btn active" data-tab="create"><span class="bnav-icon">📝</span><span class="bnav-label">创建</span></button>
+    <button class="bnav-btn" data-tab="monitor"><span class="bnav-icon">📊</span><span class="bnav-label">监控</span></button>
+    <button class="bnav-btn" data-tab="history"><span class="bnav-icon">📋</span><span class="bnav-label">历史</span></button>
+    <button class="bnav-btn" id="bnavMore"><span class="bnav-icon">☰</span><span class="bnav-label">更多</span></button>
+  </nav>
+
+  <script defer src="https://my.bdfz.net/site-auth.js" data-mobile-inset-bottom="84"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <script type="module" src="./js/app.js?v=20261108-mainline-v200"></script>
+</body>
+
+</html>

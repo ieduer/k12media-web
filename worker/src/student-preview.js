@@ -62,7 +62,7 @@ export async function handleStudentPreview(request, env = {}, { checkLogin = che
 export default { async fetch(request, env) {
   const url = new URL(request.url);
   if (url.pathname.startsWith('/api/')) {
-    if (!/^[a-z0-9-]+\.k12media-web\.pages\.dev$/.test(url.hostname)) return json({code:'login_test_closed'},503);
+    if (url.hostname !== 'paper.bdfz.net' && !/^[a-z0-9-]+\.k12media-web\.pages\.dev$/.test(url.hostname)) return json({code:'login_test_closed'},503);
     return handleStudentPreview(request, env);
   }
   return env.ASSETS.fetch(request);
