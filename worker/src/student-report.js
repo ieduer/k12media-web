@@ -9,14 +9,14 @@ export const reportHeaders={
 };
 export function cleanCss(css){return css.replace(/@import[^;]*(?:;|$)/gi,'').replace(/url\([^)]*\)/gi,'none').replace(/expression\([^)]*\)/gi,'').replace(/(?:behavior|-moz-binding)\s*:[^;}]+[;}]?/gi,'');}
 export async function renderReport(html,{session,examId,paperId,capability}){
- const seenTags={};
  let count=0;
  const make=async(kind,data)=>{if(++count>180)throw new StudentSourceError('source_response_too_large');return '/api/student/'+kind+'?ticket='+await capability(kind,{examId,...data});};
  let imageLink='';if(paperId){const form=await extractImageForm(html,examId,paperId);if(form)imageLink=await make('images',{fields:form});}
  const rw=new HTMLRewriter().on('*',{async element(e){
-   const tag=e.tagName.toLowerCase();seenTags[tag]=(seenTags[tag]||0)+1;const original=Object.fromEntries(e.attributes);
+   const tag=e.tagName.toLowerCase();const original=Object.fromEntries(e.attributes);
    if(!tags.has(tag)){if(['script','style','iframe','object','embed','svg','math','template','noscript'].includes(tag))e.remove();else e.removeAndKeepContent();return;}
-   for(const [name] of e.attributes)e.removeAttribute(name);
+   // Production HTMLRewriter invalidates its native iterator on mutation.
+   for(const name of Object.keys(original))e.removeAttribute(name);
    for(const [k,v] of Object.entries(original))if(attrs.has(k)&&v.length<512)e.setAttribute(k,v);
    if(original.style&&original.style.length<2048&&!/[\\@<>]|url|expression|behavior|binding|image-set/i.test(original.style))e.setAttribute('style',original.style);
    if(tag==='head')e.append('<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/css/report.css">',{html:true});
@@ -39,5 +39,6 @@ export async function renderReport(html,{session,examId,paperId,capability}){
    }
  }});
  const output=await rw.transform(new Response(html)).text();
- return new Response(output,{headers:{...reportHeaders,'X-Report-Input-Bytes':String(html.length),'X-Report-Tags':Object.entries(seenTags).map(([k,v])=>k+':'+v).join(',').slice(0,1500)}});
+ if(output.length<100)throw new StudentSourceError('source_report_unavailable');
+ return new Response(output,{headers:reportHeaders});
 }

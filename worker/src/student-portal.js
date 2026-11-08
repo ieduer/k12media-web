@@ -1,5 +1,5 @@
 import { StudentSourceError } from './student-source.js';
-import { beginStudentLogin,finishStudentLogin,parseHome,sourceRequest,loadExamReport,extractImages,extractImageForm,extractSubjectResults,allowedAsset,boundedText } from './student-portal-source.js';
+import { beginStudentLogin,finishStudentLogin,parseHome,loadStudentHome,sourceRequest,loadExamReport,extractImages,extractImageForm,extractSubjectResults,allowedAsset,boundedText } from './student-portal-source.js';
 import { seal,unseal,sessionCookie,readCookie } from './student-session.js';
 import { renderReport,reportHeaders,escapeHtml,cleanCss } from './student-report.js';
 import { hasAffinity,mergeSourceCookies } from './student-cookies.js';
@@ -66,7 +66,7 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
   if(!hasAffinity(session.cookies))throw new StudentSourceError('session_expired',401);
   context.session=session;context.initialCookies=session.cookies;phase=route;
   if(route==='me'){
-   const home=await parseHome(await sourceRequest('/tqweb/demo/MainAction.a?loginDispatcher',session,{fetcher}));
+   const home=await loadStudentHome(session,{fetcher});
    if(!home.exams.length&&session.knownExamCount>0)throw new StudentSourceError('source_catalog_unavailable');
    return json(await homeResponse(home,session,secret,audience));
   }
@@ -84,12 +84,12 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
    const scored=subjects.filter(s=>s.score!==null&&s.maxScore!==null);
    return json({subjects,totals:{score:scored.reduce((sum,s)=>sum+s.score,0),maxScore:scored.reduce((sum,s)=>sum+s.maxScore,0),published:scored.length},reportUrl:'/api/student/exam?ticket='+url.searchParams.get('ticket')});
   }
-  if(route==='exam')return renderReport(await loadExamReport(session,ticket.examId,{fetcher}),{session,examId:ticket.examId,capability});
+  if(route==='exam')return await renderReport(await loadExamReport(session,ticket.examId,{fetcher}),{session,examId:ticket.examId,capability});
   let imageFields;
   if(route==='subject'||route==='subject-images'){
    const html=await sourceRequest('/tqweb/report/SubjectReportSmallPointsAction.a?showSubjectStudentReport',session,{body:new URLSearchParams({...ticket.fields,schoolIdStr:''}).toString(),fetcher});
    if(!html.includes('findStudentImgJs'))throw new StudentSourceError('source_report_unavailable');
-   if(route==='subject')return renderReport(html,{session,examId:ticket.examId,paperId:ticket.fields.paperId,capability});
+   if(route==='subject')return await renderReport(html,{session,examId:ticket.examId,paperId:ticket.fields.paperId,capability});
    imageFields=await extractImageForm(html,ticket.examId,ticket.fields.paperId);
    if(!imageFields)throw new StudentSourceError('source_images_unavailable',404);
   }

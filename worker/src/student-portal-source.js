@@ -29,20 +29,27 @@ export async function finishStudentLogin(credentials,selected,choice,{fetcher=fe
  if(target.origin!==STUDENT_ORIGIN || target.pathname!=='/tqweb/demo/MainAction.a' || !target.searchParams.has('loginDispatcher'))fail('source_login_not_accepted',403);
  if(![302,303].includes(r.status))fail('source_login_outcome_unknown');
  const state={cookies};
- const html=await sourceRequest('/tqweb/demo/MainAction.a?loginDispatcher',state,{fetcher});
- const home=await parseHome(html);
+ const home=await loadStudentHome(state,{fetcher});
  return {cookies:state.cookies,schoolId:choice.schoolId,classId:choice.classId,home};
 }
 export {beginStudentLogin};
+export async function loadStudentHome(session,{fetcher=fetch}={}){
+ const home=await parseHome(await sourceRequest('/tqweb/demo/MainAction.a?loginDispatcher',session,{fetcher}));
+ if(Object.keys(home.allFilters).length===2){
+  return parseHome(await sourceRequest('/tqweb/demo/MainAction.a',session,{body:new URLSearchParams(home.allFilters).toString(),fetcher}));
+ }
+ return home;
+}
 export async function parseHome(html){
  if(!html.includes('ChangePasswordAction')||!html.includes('j_acegi_logout'))fail('source_identity_unconfirmed',401);
- const exams=[],seen=new Set();let name='';
+ const exams=[],seen=new Set(),allFilters={};let name='',select='',option=null;
  // Capture text per matching anchor without relying on source presentation classes.
  let current=null;
  const rewriter=new HTMLRewriter().on('a',{element(e){const h=e.getAttribute('href')||'';const m=h.match(/^javascript:viewTest\(\s*['"]\/tqweb\/report\/NewStudentReport\.a\?showStudentScoreReport['"]\s*,\s*(\d+)\s*\);?$/);current=null;if(m&&!seen.has(m[1])){seen.add(m[1]);current={id:m[1],title:''};exams.push(current);}e.onEndTag(()=>{current=null;});},text(t){if(current)current.title+=t.text;}}).on('a[href*="ChangePasswordAction"]',{text(t){name+=t.text;}});
+ rewriter.on('form#frm select',{element(e){const key=e.getAttribute('name');select=['schoolYearId','testSemester'].includes(key)?key:'';e.onEndTag(()=>select='');}}).on('form#frm option',{element(e){option={name:select,value:e.getAttribute('value')||'',label:''};e.onEndTag(()=>{if(option?.name&&/全部|所有|不限/.test(option.label))allFilters[option.name]=option.value;option=null;});},text(t){if(option)option.label+=t.text;}});
  await rewriter.transform(new Response(html)).text();
  if(exams.length>500)fail('source_schema_changed');
- return {name:name.replace(/\s+/g,' ').trim().slice(0,128),exams:exams.map(e=>({id:e.id,title:e.title.replace(/\s+/g,' ').trim()||'考试'}))};
+ return {name:name.replace(/\s+/g,' ').trim().slice(0,128),allFilters,exams:exams.map(e=>({id:e.id,title:e.title.replace(/\s+/g,' ').trim()||'考试'}))};
 }
 export async function loadExamReport(session,examId,{fetcher=fetch}={}){
  if(!/^\d+$/.test(examId))fail('invalid_request',400);
