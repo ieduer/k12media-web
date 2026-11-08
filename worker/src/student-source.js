@@ -32,6 +32,14 @@ export function parseDwrReply(source, batch, call = '0') {
     ws(); if (depth > 12) return failure('source_schema_changed');
     const ch = source[at];
     if (ch === '"') return string();
+    // DWR serializes nullable date fields as new Date(milliseconds), even on a
+    // successful account DTO. Decode only this exact numeric data production;
+    // never evaluate constructors or other source JavaScript.
+    if (source.slice(at).startsWith('new Date(')) {
+      const date = source.slice(at).match(/^new Date\((-?\d{1,16})\)/);
+      if (!date || !Number.isSafeInteger(Number(date[1]))) return failure('source_schema_changed');
+      at += date[0].length; return Number(date[1]);
+    }
     if (ch === '[' || ch === '{') {
       at++; const array = ch === '[', end = array ? ']' : '}', out = array ? [] : Object.create(null); let count = 0;
       ws(); if (source[at] === end) { at++; return out; }
@@ -127,7 +135,7 @@ export async function beginStudentLogin({ username, password }, { fetcher = fetc
       const bytes = new Uint8Array(size); let offset=0; for (const chunk of chunks) {bytes.set(chunk,offset);offset+=chunk.length;}
       text = new TextDecoder().decode(bytes);
     } catch (error) { if (error instanceof StudentSourceError) throw error; return failure('source_transport_failed'); }
-    for (const raw of response.headers.getSetCookie()) {
+    for (const raw of (typeof response.headers.getSetCookie === 'function' ? response.headers.getSetCookie() : response.headers.getAll('Set-Cookie'))) {
       const match = raw.match(/^(JSESSIONID|DWRSESSIONID)=([A-Za-z0-9_.!~+\/-]{1,256})(?:;|$)/);
       if (match) jar.set(match[1],match[2]);
     }

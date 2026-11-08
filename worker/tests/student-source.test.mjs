@@ -45,3 +45,10 @@ test('source lock and unknown refusal are distinguished without leaking upstream
     assert.equal(replies.length,0);
   }
 });
+
+test('DWR date fields are parsed as data without executing source JavaScript',()=>{
+  const reply='dwr.engine.remote.handleCallback("2","0",[{type:1,schoolId:1,classId:2,lockTime:new Date(1700000000000),errorMessage:null}]);';
+  assert.equal(parseDwrReply(reply,2)[0].lockTime,1700000000000);
+  for(const bad of ['new Date(alert(1))','new Function("return 1")()','new Date("1700000000000")'])
+    assert.throws(()=>parseDwrReply(reply.replace('new Date(1700000000000)',bad),2));
+});

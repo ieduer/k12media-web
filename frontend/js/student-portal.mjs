@@ -1,0 +1,20 @@
+const $=id=>document.getElementById(id);
+const messages={source_credentials_rejected:'姓名或密码不正确。',source_account_locked:'账号已锁定，请先在星立方解锁。',source_login_not_accepted:'星立方未接受本次登录，请核对账号。',source_rate_limited:'请稍后再试，避免连续提交。',session_expired:'登录已过期，请重新登录。',source_transport_failed:'暂时无法连接星立方，请稍后再试。',source_login_outcome_unknown:'登录结果尚未确认，请勿连续提交。',service_unavailable:'服务暂时不可用，请稍后再试。'};
+let busy=false,selection='',credentials=null,reportHistory=[];
+function showError(code){$('login-error').textContent=messages[code]||'暂时无法完成登录，请稍后再试。';$('login-error').hidden=false;}
+function render(data){
+ credentials=null;selection='';$('password').value='';$('login-view').hidden=true;$('portal-view').hidden=false;$('student-name').textContent=data.name||'';
+ $('exam-list').hidden=false;$('report-view').hidden=true;$('exam-count').textContent=data.exams.length+' 场';$('empty').hidden=!!data.exams.length;$('exams').replaceChildren();
+ for(const [i,exam] of data.exams.entries()){const card=document.createElement('button');card.className='exam-card';card.type='button';const no=document.createElement('span');no.className='exam-number';no.textContent=String(i+1).padStart(2,'0');const title=document.createElement('h3');title.textContent=exam.title;const label=document.createElement('span');label.className='exam-open';label.textContent='查看成绩与报告 →';card.append(no,title,label);card.addEventListener('click',()=>{$('exam-list').hidden=true;$('report-view').hidden=false;$('report-title').textContent=exam.title;reportHistory=[];$('report').src=exam.url;});$('exams').append(card);}
+}
+$('reveal').addEventListener('click',()=>{const show=$('password').type==='password';$('password').type=show?'text':'password';$('reveal').textContent=show?'隐藏':'显示';$('reveal').setAttribute('aria-pressed',String(show));});
+$('student-login').addEventListener('submit',async e=>{e.preventDefault();if(busy||!$('student-login').reportValidity())return;busy=true;$('submit').disabled=true;$('submit').textContent='正在登录…';$('login-error').hidden=true;
+ let payload=selection?{...credentials,selection,choice:Number($('choice').value)}:{username:$('username').value.trim(),password:$('password').value};
+ try{const response=await fetch('/api/student/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload),credentials:'same-origin',cache:'no-store',redirect:'error',signal:AbortSignal.timeout(155000)});const data=await response.json();if(data.state==='selection_required'){selection=data.selection;credentials={username:payload.username,password:payload.password};$('choice-field').hidden=false;$('choice').replaceChildren();for(const item of data.choices){const option=document.createElement('option');option.value=item.index;option.textContent=item.label;$('choice').append(option);}return;}if(!response.ok||!data.authenticated){showError(data.code);credentials=null;selection='';$('password').value='';return;}render(data);
+ }catch{showError('source_login_outcome_unknown');credentials=null;selection='';$('password').value='';}finally{payload=null;busy=false;$('submit').disabled=false;$('submit').textContent='登录';}});
+$('logout').addEventListener('click',async()=>{await fetch('/api/student/logout',{method:'POST',credentials:'same-origin'});location.replace('/');});
+$('back').addEventListener('click',()=>{$('report').src='about:blank';$('report-view').hidden=true;$('exam-list').hidden=false;reportHistory=[];});
+$('report').addEventListener('load',()=>{try{const url=$('report').contentWindow.location.href;if(url.startsWith(location.origin+'/api/student/')){if(reportHistory.at(-1)!==url)reportHistory.push(url);$('report-back').disabled=reportHistory.length<2;}}catch{}});
+$('report-back').addEventListener('click',()=>{if(reportHistory.length>1){reportHistory.pop();$('report').src=reportHistory.at(-1);}});
+addEventListener('pagehide',()=>{credentials=null;selection='';$('password').value='';});
+fetch('/api/student/me',{credentials:'same-origin',cache:'no-store'}).then(async r=>{if(r.ok)render(await r.json());}).catch(()=>{});
