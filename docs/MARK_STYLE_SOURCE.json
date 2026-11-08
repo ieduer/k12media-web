@@ -1,5 +1,5 @@
 {
-  "observed_at": "2026-11-08T06:14:00Z",
+  "observed_at": "2026-11-08T06:18:14.446693+00:00",
   "scope": "User-requested visual reuse only; no Mark JavaScript, identity, teacher controls or service integration",
   "assets": [
     {
@@ -11,8 +11,10 @@
     {
       "source_url": "https://mark.bdfz.net/data/img/bg.webp",
       "path": "frontend/css/data/img/bg.webp",
-      "bytes": 59281,
-      "sha256": "c94ae8477d29d23bafa2720c49ba7c64decbbdee46f89ac0380d840a09225f2c"
+      "bytes": 736042,
+      "sha256": "b56dd4d4ced8c4e42f17ebbc2560aa27e0f6287de6e379ebcdb2e2b824e43086",
+      "source": "Mark canonical workspace public/data/img/bg.webp",
+      "live_response": "200 text/html SPA fallback, not an image; used existing Mark artwork file instead"
     },
     {
       "source_url": "https://mark.bdfz.net/data/fonts/HuWenMingChaoTi.woff2",
