@@ -8,8 +8,9 @@ const HEADERS = {
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: HEADERS });
 // Best-effort isolate-local throttling for this short-lived preview. Production
 // requires a shared limiter; this is not a cross-region/account lock guarantee.
-const attempts = new Map(), salt = crypto.randomUUID();
+const attempts = new Map(); let salt;
 async function takeSlot(request, username) {
+  salt ||= crypto.randomUUID();
   const now = Date.now();
   for (const [key, until] of attempts) if (until <= now) attempts.delete(key);
   if (attempts.size >= 2000) return false;
