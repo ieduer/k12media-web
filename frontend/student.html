@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow">
+  <title>学生登录 · 我的试卷</title>
+  <link rel="stylesheet" href="/css/student.css">
+  <script type="module" src="/js/student-login.mjs"></script>
+</head>
+<body>
+  <header><a class="brand" href="/student.html"><span class="mark" aria-hidden="true">卷</span>我的试卷</a><span class="badge">学生登录测试</span></header>
+  <main>
+    <section class="intro" aria-labelledby="title"><p class="eyebrow">PAPER · 学生专属</p><h1 id="title">每一次作答，<br>都值得回看。</h1><p class="lead">用自己的星立方账号登录，<br>从这里开始查看你的考试记录。</p><div class="note"><span aria-hidden="true">01</span><p>本次先验证学生登录。<br>成绩、答卷与讨论将在身份核验接通后开放。</p></div></section>
+    <section class="card" aria-labelledby="login-title"><h2 id="login-title">验证学生登录</h2><p class="hint">请输入你在星立方使用的账号。</p>
+      <form id="student-login"><label for="username">学生姓名 / 已绑定手机</label><input id="username" name="username" autocomplete="username" maxlength="128" required aria-describedby="name-help"><small id="name-help">通常使用学生姓名，考号不一定是登录名。</small>
+        <label for="password">密码</label><div class="password-field"><input id="password" name="password" type="password" autocomplete="current-password" maxlength="256" required><button id="reveal" type="button" aria-label="显示密码" aria-pressed="false">显示</button></div>
+        <button class="submit" id="submit" type="submit">验证登录 <span aria-hidden="true">→</span></button>
+      </form>
+      <div id="result" class="result" role="status" aria-live="polite" tabindex="-1" hidden><strong id="result-title"></strong><p id="result-detail"></p><p id="result-code" class="code"></p></div>
+      <p class="privacy">姓名和密码仅用于本次星立方登录请求。本页不保存密码，不会自动重试。</p>
+      <a class="source-link" href="https://test.k12media.cn:8000/tqweb/login.jsp" target="_blank" rel="noopener noreferrer">打开星立方学生入口 <span aria-hidden="true">↗</span></a>
+      <noscript><p>请启用 JavaScript，或使用上方星立方入口登录。</p></noscript>
+    </section>
+  </main><footer>我的试卷 · paper.bdfz.net <span>测试结果反馈只需提供提示代码，请勿发送密码。</span></footer>
+</body>
+</html>
