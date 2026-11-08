@@ -41,6 +41,12 @@ permission, password or Mark production change was made. Student-led preparatory
 acceptance and Status remain pending. Status publisher currently requires canonical
 accepted authority and cannot represent this separately accepted preview/DNS channel.
 
+User clarification at 2026-11-08T12:07:29.954289+00:00: a usable source paper may not exist yet.
+Keep teacher integration pending source availability; no repeated student login
+is requested. The cause of unavailable teacher data is not yet established.
+
+Student-first integration policy confirmed by user: use the authenticated student source for every available exam, grade, report and image. Teacher reads may supplement only missing real-time exams or missing components, never replace accepted student data or block student login. Teacher results require exact authenticated source student ID plus school/class agreement; a name match is insufficient. Teacher errors preserve all student-source results. No R2 transfer. Teacher adapter activation remains pending an authenticated source path that returns verifiable grades and full answer pages.
+
 Current evidence and remaining work:
 [release report](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/completion/REPORT.md).
 Earlier sections below are historical and superseded where this summary differs.
