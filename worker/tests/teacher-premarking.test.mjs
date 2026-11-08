@@ -146,3 +146,94 @@ test('redirects and oversized source payloads stop with bounded sanitized errors
     assert.equal(f.calls.length, 2); client.close();
   }
 });
+
+const completeStudent = { ...student, status: '卷全' };
+const picture = (pageNo, extra = {}) => ({ testNo: student.testNo, testStudentName: student.testStudentName,
+  pathId: 'fixture-path', imageFileScanName: `scan-${pageNo}.jpg`, answerPaperSn: pageNo, ...extra });
+const pictureResponse = rows => ({ result: 0, data: rows });
+const imageBytes = () => { const bytes = new Uint8Array(300); bytes.set([255, 216, 255]); return bytes; };
+
+test('complete source manifest uses exact roster identity and source original-download action', async () => {
+  const f = mock([login, roster([completeStudent]), pictureResponse([picture(2), picture(1)]), new Response(imageBytes()), new Response(imageBytes())]);
+  const client = await createPremarkingTeacher(credentials, f);
+  const manifest = await client.originalPages(scope, 30);
+  assert.equal(manifest.state, 'source_declared_pages');
+  assert.deepEqual(manifest.pages.map(p => p.pageNo), [1, 2]);
+  await assert.rejects(client.downloadOriginal({ pageNo: 1 }), /teacher_image_scope_invalid/);
+  for (const page of manifest.pages) {
+    const image = await client.downloadOriginal(page);
+    assert.equal(image.type, 'image/jpeg'); assert.equal(image.bytes.length, 300);
+    const call = f.calls.at(-1), url = new URL(call.url);
+    assert.equal(call.init.method, 'GET');
+    assert.equal(url.origin, 'https://yue.k12media.cn');
+    assert.equal(url.pathname, '/premarking/server/DownloadRawImageFile.ashx');
+    assert.equal(url.searchParams.get('imageFileName'), `scan-${page.pageNo}.jpg`);
+    assert.equal(call.init.headers.Referer, 'https://yue.k12media.cn/premarking/h5/index.html');
+    assert(!JSON.stringify(page).includes('fixture-token'));
+  }
+  client.close(); await assert.rejects(client.downloadOriginal(manifest.pages[0]), /teacher_session_closed/);
+});
+
+test('no-sheet state prevents all manifest and download calls', async () => {
+  const f = mock([login, roster()]), client = await createPremarkingTeacher(credentials, f);
+  assert.deepEqual(await client.originalPages(scope, 30), { state: 'no_answer_images', pages: [] });
+  assert.equal(f.calls.length, 2); client.close();
+});
+
+test('foreign identities, gaps, duplicate pages and filename traversal never issue image references', async () => {
+  for (const [rows, error] of [
+    [[picture(1, { testNo: 'other-student' })], 'teacher_image_identity_mismatch'],
+    [[picture(1), picture(3)], 'teacher_image_manifest_incomplete'],
+    [[picture(1), picture(1)], 'teacher_image_manifest_invalid'],
+    [[picture(1, { imageFileScanName: '../foreign.jpg' })], 'teacher_image_manifest_invalid']
+  ]) {
+    const f = mock([login, roster([completeStudent]), pictureResponse(rows)]), client = await createPremarkingTeacher(credentials, f);
+    await assert.rejects(client.originalPages(scope, 30), new RegExp(error));
+    await assert.rejects(client.originalPages(scope, 30), new RegExp(error));
+    assert.equal(f.calls.length, 3); client.close();
+  }
+});
+
+test('a denied first image stops the subject; a two-page manifest is not image acceptance', async () => {
+  const f = mock([login, roster([completeStudent]), pictureResponse([picture(1), picture(2)]),
+    { BusinessSuccess: false, ErrorReason: '用户无权限下载图片' }]);
+  const client = await createPremarkingTeacher(credentials, f), manifest = await client.originalPages(scope, 30);
+  assert.equal(manifest.state, 'source_declared_pages');
+  for (const page of manifest.pages) await assert.rejects(client.downloadOriginal(page), /teacher_permission_denied/);
+  assert.equal(f.calls.length, 4); client.close();
+});
+
+test('JSON-wrapped source images decode but JSON errors and truncated images are not accepted', async () => {
+  for (const [reply, succeeds] of [
+    [{ BusinessSuccess: true, FileContent: Buffer.from(imageBytes()).toString('base64') }, true],
+    [{ BusinessSuccess: true, FileContent: Buffer.from('private error').toString('base64') }, false],
+    [new Response(new Uint8Array([255, 216, 255])), false]
+  ]) {
+    const f = mock([login, roster([completeStudent]), pictureResponse([picture(1)]), reply]);
+    const client = await createPremarkingTeacher(credentials, f), manifest = await client.originalPages(scope, 30);
+    if (succeeds) assert.equal((await client.downloadOriginal(manifest.pages[0])).bytes.length, 300);
+    else await assert.rejects(client.downloadOriginal(manifest.pages[0]), /teacher_image_unavailable/);
+    client.close();
+  }
+});
+
+test('subjective item inspection preserves an empty response and never fabricates a zero grade', async () => {
+  const f = mock([login, roster([completeStudent]), { result: 0, data: [] }]);
+  const client = await createPremarkingTeacher(credentials, f);
+  await assert.rejects(client.itemScores(scope, 31), /teacher_student_not_in_roster/);
+  assert.deepEqual(await client.itemScores(scope, 30), []);
+  assert.equal(f.calls.at(-1).url, 'https://yue.k12media.cn/webReadingPrep/testmateDivision/testStudentIdItemId');
+  assert.equal(f.calls.at(-1).init.body.get('checkType'), '0');
+  assert.equal((await client.roster(scope)).scoreAvailable, false);
+  client.close();
+});
+
+test('business-level authentication failures in image and score readers stop the entire session', async () => {
+  for (const method of ['originalPages', 'itemScores']) {
+    const f = mock([login, roster([completeStudent]), { result: -1, failedReason: '登录失效' }]);
+    const client = await createPremarkingTeacher(credentials, f);
+    await assert.rejects(client[method](scope, 30), /teacher_login_required/);
+    await assert.rejects(client.roster({ testId: 10, paperId: 21 }), /teacher_login_required/);
+    assert.equal(f.calls.length, 3); client.close();
+  }
+});

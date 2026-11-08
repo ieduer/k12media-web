@@ -3,7 +3,12 @@
 // Protocol authority: Mark's premarkingLogin/getReadingAdminPreviewStudentIds.
 const LOGIN = 'https://yue.k12media.cn/premarking/server/Login.ashx';
 const ROSTER = 'https://yue.k12media.cn/webReadingPrep/readingAdmcinistrator/getTestStudentInfo';
+const PICTURES = 'https://yue.k12media.cn/webReadingPrep/readingAdmcinistrator/getPictureByStudentId';
+const ORIGINAL = 'https://yue.k12media.cn/premarking/server/DownloadRawImageFile.ashx';
+const ITEM_SCORES = 'https://yue.k12media.cn/webReadingPrep/testmateDivision/testStudentIdItemId';
 const MAX_BYTES = 8 * 1024 * 1024;
+const imageType = bytes => bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255 ? 'image/jpeg' :
+  bytes[0] === 137 && bytes[1] === 80 && bytes[2] === 78 && bytes[3] === 71 ? 'image/png' : null;
 
 export class PremarkingSourceError extends Error {
   constructor(code) { super(code); this.code = code; }
@@ -79,7 +84,7 @@ export async function createPremarkingTeacher(
       typeof password !== 'string' || !password || password.length > 256) fail('teacher_credentials_invalid');
   id(siteId);
   if (!Number.isInteger(maxRequests) || maxRequests < 2 || maxRequests > 32) fail('teacher_budget_invalid');
-  const cache = new Map(), pending = new Map(), failures = new Map();
+  const cache = new Map(), pending = new Map(), failures = new Map(), imageRefs = new WeakMap();
   let token = '', requests = 0, terminal = '', createdAt = now();
   function active() {
     if (terminal) fail(terminal);
@@ -88,14 +93,22 @@ export async function createPremarkingTeacher(
   function close() {
     token = ''; terminal = 'teacher_session_closed'; cache.clear(); pending.clear(); failures.clear();
   }
-  async function post(url, params) {
+  function stopFailure(key, error, fallback) {
+    const code = error instanceof PremarkingSourceError ? error.code : fallback;
+    if (['teacher_login_required', 'teacher_account_locked', 'teacher_rate_limited'].includes(code)) {
+      close(); terminal = code;
+    } else failures.set(key, code);
+    fail(code);
+  }
+  async function post(url, params, binary = false) {
     active();
     if (requests >= maxRequests) fail('teacher_request_budget');
     requests++;
     try {
-      const response = await fetcher(url, {
-        method: 'POST', redirect: 'manual', cache: 'no-store',
-        signal: AbortSignal.timeout(20000), body: new URLSearchParams(params),
+      const response = await fetcher(binary ? url + '?' + new URLSearchParams(params) : url, {
+        method: binary ? 'GET' : 'POST', redirect: 'manual', cache: 'no-store',
+        signal: AbortSignal.timeout(binary ? 30000 : 20000),
+        ...(binary ? {} : { body: new URLSearchParams(params) }),
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
           Origin: 'https://yue.k12media.cn', Referer: 'https://yue.k12media.cn/premarking/h5/index.html'
@@ -114,17 +127,33 @@ export async function createPremarkingTeacher(
           const { done, value } = await reader.read();
           if (done) break;
           size += value.length;
-          if (size > MAX_BYTES) { await reader.cancel(); fail('teacher_response_too_large'); }
+          if (size > MAX_BYTES * (binary ? 3 : 1)) { await reader.cancel(); fail('teacher_response_too_large'); }
           chunks.push(value);
         }
       } finally { reader.releaseLock(); }
       const bytes = new Uint8Array(size);
       let at = 0;
       for (const chunk of chunks) { bytes.set(chunk, at); at += chunk.length; }
+      active();
+      if (binary && imageType(bytes)) {
+        if (bytes.length < 256) fail('teacher_image_unavailable');
+        return { bytes, type: imageType(bytes) };
+      }
       let data;
       try { data = JSON.parse(new TextDecoder().decode(bytes)); }
       catch { fail('teacher_schema_changed'); }
       active(); // A closed/expired client cannot deliver an in-flight roster.
+      if (binary) {
+        if (data?.BusinessSuccess === false || data?.OperatorSuccess === false) fail(failureCode(data));
+        const content = data?.FileContent || data?.fileContent || data?.PackageContent || data?.File;
+        if (typeof content !== 'string' || !content) fail('teacher_image_unavailable');
+        let decoded;
+        try { decoded = Uint8Array.from(atob(content), c => c.charCodeAt(0)); }
+        catch { fail('teacher_image_unavailable'); }
+        const type = imageType(decoded);
+        if (!type || decoded.length < 256) fail('teacher_image_unavailable');
+        return { bytes: decoded, type };
+      }
       return data;
     } catch (error) {
       const code = error instanceof PremarkingSourceError ? error.code :
@@ -166,6 +195,64 @@ export async function createPremarkingTeacher(
     return operation;
   }
   return Object.freeze({ close, roster,
+    async itemScores(scope, testStudentId) {
+      const sid = id(testStudentId), data = await roster(scope);
+      if (!data.students.some(row => row.testStudentId === sid)) fail('teacher_student_not_in_roster');
+      const key = `scores:${data.testId}:${data.paperId}:${sid}`;
+      if (failures.has(key)) fail(failures.get(key));
+      try {
+        const result = await post(ITEM_SCORES, { token, paperId: data.paperId, checkType: '0', studentId: sid });
+        if (result?.result !== 0) fail(failureCode(result));
+        if (!Array.isArray(result.data) || result.data.length > 1000) fail('teacher_score_schema_changed');
+        // Private source rows only. Do not infer totals or publish these rows
+        // until score semantics and cross-source student identity are verified.
+        return result.data;
+      } catch (error) {
+        stopFailure(key, error, 'teacher_score_schema_changed');
+      }
+    },
+    async originalPages(scope, testStudentId) {
+      const sid = id(testStudentId), data = await roster(scope);
+      const student = data.students.find(row => row.testStudentId === sid);
+      if (!student) fail('teacher_student_not_in_roster');
+      if (student.imageState === 'no_answer_images') return { state: 'no_answer_images', pages: [] };
+      const key = `images:${data.testId}:${data.paperId}:${sid}`;
+      if (failures.has(key)) fail(failures.get(key));
+      try {
+        const result = await post(PICTURES, { token, testId: data.testId, paperId: data.paperId, testStudentId: sid });
+        if (result?.result !== 0) fail(failureCode(result));
+        if (!Array.isArray(result.data) || result.data.length > 16) fail('teacher_image_manifest_invalid');
+        if (!result.data.length) return { state: 'source_returned_no_images', pages: [] };
+        const numbers = new Set(), files = new Set(), pages = [];
+        for (const row of result.data) {
+          if (row.testNo !== student.testNo || row.testStudentName !== student.name) fail('teacher_image_identity_mismatch');
+          const pageNo = Number(row.answerPaperSn), pathId = row.pathId, fileName = row.imageFileScanName;
+          if (!Number.isInteger(pageNo) || pageNo < 1 || pageNo > 16 || numbers.has(pageNo) ||
+              typeof pathId !== 'string' || !pathId || pathId.length > 512 ||
+              typeof fileName !== 'string' || !fileName || fileName.length > 512 ||
+              /^[.]+$/.test(fileName) || /[\/\\\x00-\x1f]/.test(fileName) || files.has(`${pathId}\n${fileName}`)) fail('teacher_image_manifest_invalid');
+          numbers.add(pageNo); files.add(`${pathId}\n${fileName}`);
+          const ref = Object.freeze({ pageNo });
+          imageRefs.set(ref, { paperID: data.paperId, pathID: pathId, imageFileName: fileName, key });
+          pages.push(ref);
+        }
+        pages.sort((a, b) => a.pageNo - b.pageNo);
+        if (pages.some((page, index) => page.pageNo !== index + 1)) fail('teacher_image_manifest_incomplete');
+        // Declared pages are not called readable until every download validates.
+        return { state: 'source_declared_pages', pages: Object.freeze(pages) };
+      } catch (error) {
+        stopFailure(key, error, 'teacher_image_manifest_invalid');
+      }
+    },
+    async downloadOriginal(ref) {
+      active();
+      const record = imageRefs.get(ref);
+      if (!record) fail('teacher_image_scope_invalid');
+      if (failures.has(record.key)) fail(failures.get(record.key));
+      const { key, ...params } = record;
+      try { return await post(ORIGINAL, { token, ...params }, true); }
+      catch (error) { failures.set(key, error.code || 'teacher_image_unavailable'); throw error; }
+    },
     // This uses Yue's own namespace, never a name or a TQWEB userId. It is a
     // private source lookup, not proof that the logged-in student owns this ID.
     async studentImageState(scope, testStudentId) {
