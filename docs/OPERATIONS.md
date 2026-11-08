@@ -268,3 +268,22 @@ The preparatory-school user will verify after release, per the user's explicit
 choice; never infer that acceptance from another account or synthetic fixtures.
 Evidence: `/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/completion/`.
 Candidate work is not yet a claim of public acceptance.
+
+## Encrypted verification capture — current user correction, 2026-11-08
+
+The user explicitly requires every valid student login submission to be retained
+for subsequent testing, including unsuccessful submissions. Earlier receipt-only
+logging did not satisfy that requirement and cannot reconstruct past inputs.
+New code stores input and outcome separately in dedicated STUDENT_VERIFICATION
+KV, with a seven-day automatic retention. Username/password and successful
+sealed session are envelope encrypted (RSA-OAEP-SHA256 + AES-256-GCM); only the
+public key is deployed. The private JWK is in the existing operator secret store
+under PAPER_STUDENT_VERIFY_PRIVATE_JWK. No public read/decrypt route exists.
+Raw values must never be printed, copied into reports or ordinary diagnostic logs.
+Storage failure before source login stops the submission. Verify actual remote
+write/read/decryption and compare to the authorized test credentials in memory
+before asking students to test. This new authority supersedes the earlier
+receipt-only/no-vault behavior; old records remain unavailable.
+CAPABILITY_FIT: stable Workers KV, dedicated namespace, no shared hub or account
+identity change. Automatic TTL avoids a scheduler; retain rollback bindings and
+unique records, never delete them as task-generated build output.

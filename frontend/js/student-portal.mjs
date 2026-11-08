@@ -4,7 +4,7 @@ const messages = {
   source_login_not_accepted: '星立方未接受本次登录，请核对账号。', source_rate_limited: '星立方暂时限制了登录，请稍后再试。', login_cooldown: '请稍后再试。',
   session_expired: '登录已过期，请重新登录。', source_transport_failed: '暂时无法连接星立方，请稍后再试。',
   source_login_outcome_unknown: '登录结果尚未确认，请勿连续提交。', source_catalog_unavailable: '暂时无法读取考试记录，请稍后再试。',
-  service_unavailable: '服务暂时不可用，请稍后再试。'
+  service_unavailable: '服务暂时不可用，请稍后再试。', verification_storage_unavailable: '服务暂时不可用，请稍后再试。'
 };
 let busy = false, selection = '', credentials = null, selectedExam = null, examData = null;
 let scoreMode = 'rate', loadSequence = 0;

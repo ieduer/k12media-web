@@ -4,6 +4,7 @@ import { seal,unseal,sessionCookie,readCookie } from './student-session.js';
 import { renderReport,reportHeaders,escapeHtml,cleanCss } from './student-report.js';
 import { hasAffinity,mergeSourceCookies } from './student-cookies.js';
 import { createLoginLimiter } from './student-login-limit.js';
+import { recordVerification } from './student-verification.js';
 const headers={'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store, private','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','Content-Security-Policy':"default-src 'none'; frame-ancestors 'none'"};
 const json=(v,status=200,extra={})=>new Response(JSON.stringify(v),{status,headers:{...headers,...extra}});
 const limit=createLoginLimiter();
@@ -25,13 +26,14 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
  if(!secret)return json({code:'service_unavailable'},503);
  if(!['GET','POST'].includes(request.method))return json({code:'method_not_allowed'},405);
  if(request.headers.get('Sec-Fetch-Site')==='cross-site'||(request.method==='POST'&&request.headers.get('Origin')!==audience))return json({code:'origin_refused'},403);
- let data,phase='request';const receipt=crypto.randomUUID();
+ let data,phase='request',recorded=false;const receipt=crypto.randomUUID();
  try{
   if(route==='login'||route==='login-check'){
    if(request.method!=='POST')return json({code:'method_not_allowed'},405);
    if(!request.headers.get('Content-Type')?.startsWith('application/json'))return json({code:'invalid_request'},415);
    data=await readInput(request);
    if(typeof data.username!=='string'||typeof data.password!=='string'||!data.username.trim()||!data.password||data.username.length>128||data.password.length>256)throw new StudentSourceError('invalid_credentials_input',400);
+   await recordVerification(env,receipt,'input',{origin:audience,username:data.username.trim(),password:data.password});recorded=true;
    let selected,choice;
    if(data.selection){
     const pending=await unseal(data.selection,secret,audience,'selection');
@@ -40,16 +42,18 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
     selected=pending.selected;choice=selected.selections[Number(data.choice)];if(!choice)throw new StudentSourceError('invalid_selection',400);
    }else{
     const gate=await limiter(request,data.username);
-    if(gate===false||gate.allowed===false){const seconds=gate.retryAfter||60;return json({code:'login_cooldown',retryAfter:seconds},429,{'Retry-After':String(seconds)});}
+    if(gate===false||gate.allowed===false){const seconds=gate.retryAfter||60;await recordVerification(env,receipt,'result',{origin:audience,code:'login_cooldown',status:429});return json({code:'login_cooldown',retryAfter:seconds},429,{'Retry-After':String(seconds)});}
     phase='account_lookup';selected=await beginStudentLogin(data,{fetcher});choice=selected.selections[0];
     if(selected.selections.length!==1){
+     await recordVerification(env,receipt,'result',{origin:audience,code:'selection_required',status:200});
      const account=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data.username.trim())))).join(',');
      return json({state:'selection_required',selection:await seal({kind:'selection',exp:Date.now()+120000,account,selected},secret,audience),choices:selected.selections.map((s,i)=>({index:i,label:`学校 ${s.schoolId} · 班级 ${s.classId}`}))});
     }
    }
    phase='form_and_home';const login=await finishStudentLogin(data,selected,choice,{fetcher});
-   const session={kind:'session',nonce:crypto.randomUUID(),exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId,knownExamCount:login.home.exams.length};
+   const session={kind:'session',nonce:receipt,exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId,knownExamCount:login.home.exams.length};
    const token=await seal(session,secret,audience);
+   await recordVerification(env,receipt,'result',{origin:audience,code:'authenticated',status:200,sessionToken:token,expiresAt:session.exp,examCount:login.home.exams.length});
    // Verification receipt only: never account, password, cookie, or source data.
    console.log(JSON.stringify({event:'student_login_verified',receipt:session.nonce,examCount:login.home.exams.length}));
    return json(await homeResponse(login.home,session,secret,audience),200,{'Set-Cookie':sessionCookie(token)});
@@ -104,6 +108,7 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
   if(!['image/png','image/jpeg','image/gif','image/webp'].includes(type)){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}
   return new Response(r.body,{headers:{...headers,'Content-Type':type,'Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'}});
  }catch(e){const code=e instanceof StudentSourceError?e.code:'source_unavailable';const status=e instanceof StudentSourceError?e.status:502;
+  if(recorded&&code!=='verification_storage_unavailable')try{await recordVerification(env,receipt,'result',{origin:audience,code,status,phase});}catch{console.log(JSON.stringify({event:'student_verification_storage_failed',receipt}));}
   console.log(JSON.stringify({event:'student_request_failed',receipt,phase,code,status}));
   if(['exam','subject','subject-images','images'].includes(route))return new Response('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/css/report.css"><p>'+escapeHtml(code==='session_expired'?'登录已过期，请重新登录。':code==='source_images_unavailable'?'源站暂未提供这份答卷。':'暂时无法读取报告，请稍后重新打开。')+'</p>',{status,headers:reportHeaders});
   return json({code,receipt},status);
