@@ -1,37 +1,50 @@
-## Current student portal candidate — 2026-11-08T11:43Z
+## Current accepted student portal — 2026-11-08T12:05:29.504457+00:00
 
-Public paper.bdfz.net currently uses accepted student source226fc29 and immutable
-preview7b65856c; legacy master/Pages canonical deployment is a separate historical
-surface. The next student release is this branch, codex/paper-student-20261107,
-through the registered exact-source preview/DNS transaction, never legacy master.
+https://paper.bdfz.net serves source `0fafb9fafdb305ed4c8fa4a27d0d113b16d285b7`
+from `ieduer/k12media-web`, branch `codex/paper-student-20261107`, deployment
+`9f6e7eac-67b9-4075-8db0-7475b570cd08`, effective 2026-11-08T11:58:40.654687Z.
+Public alias `paper-student-exports-202611.k12media-web.pages.dev` is production:
+do not overwrite it with candidate uploads. Legacy master/canonical Pages and
+old disabled Worker remain separate historical surfaces. The registered one-use
+preview/DNS transaction governs this branch. Rollback alias:
+`paper-student-fixed-20261108.k12media-web.pages.dev` (source226fc29).
 
-The candidate adds automatically loaded all-exam subject scores, embedded/list
-views, per-exam and full-history AI ZIP (JSON, CSV, report text/tables and original
-images), all answer-page previews/zoom/download, and centered source reports.
-Titles use the source's aligned title/button columns only with equal cardinality.
-Sealed source student IDs must match report IDs before issuing data or handles.
-No R2, score writes or teacher credential is added to the student bundle.
+All exams automatically show subject scores in embedded/list views. Per-exam and
+all-history ZIP include JSON/CSV, report text/tables/HTML/charts and original answer
+images. Reports fit/center; all answer pages preview, zoom and download at source
+resolution. Source student IDs must match sealed session actor before capabilities
+are issued. Images have a30-second stream deadline and one transient read retry;
+login submissions are never automatically replayed. No data is transferred to R2.
 
-Actual authorized-account reads passed16 own exams,16 full and37 subject reports,
-28 original answer images; all37 report identities match the authenticated actor.
-Browser ZIP has386 files,53 reports and208 decoded images (28 answer+180 chart),
-11931457 bytes. Source explicitly lacks23 subject answer sets; manifest remains
-incomplete and names those gaps. One image500 recovered on one exact retry.
-Browser embedded/list, report width and original-size zoom passed. Local33 unit
-checks plus11 workerd test groups passed; isolated edge and public promotion are
-still separate gates. Evidence: CF reports/operations/paper-student-20261107-01a1b986/completion.
+Actual account acceptance:16 exams,16 full reports,37 subject reports,28 original
+answer pages. ZIP386 entries/11931457 bytes; all208 images decoded (28 answer and
+180 report charts), CRC and credential/URL exclusion passed. Source explicitly
+lacks23 subject answer sets; ZIP manifest lists them and remains incomplete.
+Desktop/mobile embedded/list, report fit and original-size zoom passed.33 focused
+unit checks and12 workerd groups passed. Latest isolated and public real login,
+grade/full/subject/image-data/HD attachment paths passed; all12 public assets match.
 
-The referenced Mark thread proves read-only question images, not universal full
-scores/images. The same configured account reads a592-row roster and real question
-image for known paper51767; GetPaperScore/full-info and original-file management
-reads are denied. Old TQMS SSO returns to login; the current tqweb school-teacher
-lookup rejects the credentials. Automatic retries stopped, no permission changes.
-The teacher bridge remains unenabled pending a verified authenticated source path.
-The dedicated encrypted student vault has3 prior inputs, all the test account;
-no independent preparatory student has submitted since capture was enabled.
-Student-led preparatory acceptance and Status remain pending, not passed.
+New login inputs/results are encrypted in dedicated verification KV for7 days;
+private decryption key stays in the operator secret store. Latest vault readback
+has5 inputs, all the authorized test account. There is no
+independent preparatory-student submission to accept. The test student is not
+preparatory and correctly has no Haidian midterm. Entry has no fixed expiry;
+sealed student sessions/catalogs last2 hours.
 
-Earlier sections below are historical and superseded where this section differs.
+Teacher live bridge remains disabled: existing Mark owner session is authenticated,
+but its same-paper score route returns502 paper_score_failed. The configured
+readonly whole-paper route returns200 with imageKind=timeout and zero pages.
+Direct owner source reads verify a592-row roster and one real question image;
+full-paper management downloads and grades are not accepted. Question images and
+catalog access do not establish full grade/physical-page access. No source score,
+permission, password or Mark production change was made. Student-led preparatory
+acceptance and Status remain pending. Status publisher currently requires canonical
+accepted authority and cannot represent this separately accepted preview/DNS channel.
+
+Current evidence and remaining work:
+[release report](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/completion/REPORT.md).
+Earlier sections below are historical and superseded where this summary differs.
+
 
 # K12Media viewer project state
 
