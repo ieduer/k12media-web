@@ -105,8 +105,12 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
   if(!r.ok){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}
   const type=r.headers.get('Content-Type')?.split(';')[0].toLowerCase();
   if(asset.type==='css'){if(type!=='text/css'){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}return new Response(cleanCss(await boundedText(r,512*1024)),{headers:{...headers,'Content-Type':'text/css; charset=utf-8'}});}
-  if(!['image/png','image/jpeg','image/gif','image/webp'].includes(type)){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}
-  return new Response(r.body,{headers:{...headers,'Content-Type':type,'Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'}});
+  const reader=r.body.getReader(),chunks=[];let size=0;
+  while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>25*1024*1024){await reader.cancel();throw new StudentSourceError('source_response_too_large');}chunks.push(value);}
+  const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
+  const actual=bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'image/jpeg':bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71?'image/png':new TextDecoder().decode(bytes.slice(0,6)).match(/^GIF8[79]a$/)?'image/gif':new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP'?'image/webp':null;
+  if(!actual)throw new StudentSourceError('source_asset_unavailable');
+  return new Response(bytes,{headers:{...headers,'Content-Type':actual,'Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'}});
  }catch(e){const code=e instanceof StudentSourceError?e.code:'source_unavailable';const status=e instanceof StudentSourceError?e.status:502;
   if(recorded&&code!=='verification_storage_unavailable')try{await recordVerification(env,receipt,'result',{origin:audience,code,status,phase});}catch{console.log(JSON.stringify({event:'student_verification_storage_failed',receipt}));}
   console.log(JSON.stringify({event:'student_request_failed',receipt,phase,code,status}));
