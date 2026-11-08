@@ -24,10 +24,11 @@
  </main>
  <main id="portal-view" class="portal" hidden>
   <header class="portal-header"><div><p class="student-badge">PAPER</p><h1>我的试卷</h1></div><div class="portal-actions"><span id="student-name"></span><button class="btn" id="logout" type="button">退出</button></div></header>
-  <section id="exam-list" aria-labelledby="exam-heading"><div class="section-heading"><h2 id="exam-heading">全部考试</h2><span id="exam-count"></span></div><div class="exam-grid" id="exams"></div><p id="empty" hidden>暂无考试记录。</p></section>
+  <section id="download-panel" class="download-panel" hidden aria-live="polite"><span id="download-progress"></span><button id="download-cancel" class="btn" type="button">取消</button><a id="download-save" class="btn btn-primary" hidden>保存 ZIP</a></section>
+  <section id="exam-list" aria-labelledby="exam-heading"><div class="section-heading"><div><h2 id="exam-heading">全部考试 <span id="exam-count"></span></h2><p id="history-progress" role="status"></p></div><div class="history-actions"><div class="chart-mode" aria-label="考试显示方式"><button id="view-embedded" type="button" aria-pressed="true">嵌入</button><button id="view-list" type="button" aria-pressed="false">列表</button></div><button class="btn" id="download-all" type="button">全部打包下载</button></div></div><div class="exam-grid" id="exams"></div><p id="empty" hidden>暂无考试记录。</p></section>
   <section id="report-view" hidden>
-   <div class="section-heading"><button id="back" type="button" class="btn">← 全部考试</button><h2 id="report-title"></h2></div>
-   <nav class="exam-tabs" aria-label="考试内容"><button id="tab-scores" class="exam-tab" type="button" aria-selected="true">成绩概览</button><button id="tab-report" class="exam-tab" type="button" aria-selected="false">完整报告</button></nav>
+   <div class="section-heading"><button id="back" type="button" class="btn">← 全部考试</button><h2 id="report-title"></h2><button id="download-exam" type="button" class="btn">本次打包下载</button></div>
+   <nav class="exam-tabs" aria-label="考试内容"><button id="tab-scores" class="exam-tab" type="button" aria-selected="true">成绩概览</button><button id="tab-report" class="exam-tab" type="button" aria-selected="false">完整报告</button><button id="tab-answers" class="exam-tab" type="button" aria-selected="false">我的答卷</button></nav>
    <div id="score-view"><p id="score-loading" role="status">正在读取成绩…</p><div id="score-error" class="msg-box" role="alert" hidden><span id="score-error-text"></span><button id="score-retry" type="button" class="btn">重新读取</button></div>
     <div id="score-content" hidden><div class="score-summary"><div><span>已公布科目合计</span><p><strong id="total-score"></strong><small id="total-max"></small></p></div><div><span>综合得分率</span><p><strong id="total-rate"></strong></p></div><div><span>科目</span><p><strong id="subject-count"></strong></p></div></div>
      <div class="chart-heading"><h3>各科表现</h3><div class="chart-mode" aria-label="图表显示"><button id="mode-rate" type="button" aria-pressed="true">得分率</button><button id="mode-score" type="button" aria-pressed="false">分数</button></div></div>
@@ -35,7 +36,9 @@
      <div class="grade-table-wrap"><table class="grade-table"><thead><tr><th scope="col">科目</th><th scope="col">得分 / 满分</th><th scope="col">得分率</th><th scope="col">等级</th><th scope="col">查看</th></tr></thead><tbody id="grade-rows"></tbody></table></div>
     </div>
    </div>
+   <div id="answers-view" hidden><p id="answers-loading" role="status"></p><div id="answer-pages"></div></div>
    <div id="document-view" hidden><div class="document-toolbar"><button id="report-back" type="button" class="btn">← 返回成绩</button><span id="document-title"></span><a id="document-open" target="_blank" rel="noopener noreferrer">新窗口打开 ↗</a></div><iframe id="report" title="考试报告" sandbox="allow-same-origin allow-downloads" referrerpolicy="no-referrer"></iframe></div>
   </section>
  </main>
+ <dialog id="image-preview"><div class="preview-toolbar"><a id="preview-download" class="btn" download>下载高清原图</a><button id="preview-zoom" type="button" class="btn">放大</button><button id="preview-close" class="btn" type="button">关闭</button></div><img id="preview-image" alt="答卷高清预览"></dialog>
 </body></html>

@@ -15,6 +15,7 @@ const source = execFileSync('git', ['rev-parse','HEAD'], {cwd:root,encoding:'utf
 await mkdir(out,{recursive:true});
 const assets = {'index.html':'frontend/student.html','student.html':'frontend/student.html','css/student.css':'frontend/css/student.css','js/student-login.mjs':'frontend/js/student-login.mjs',
   'js/student-portal.mjs':'frontend/js/student-portal.mjs','css/report.css':'frontend/css/report.css',
+  'js/student-download.mjs':'frontend/js/student-download.mjs','js/student-export.mjs':'frontend/js/student-export.mjs',
   'css/mark-style.css':'frontend/css/mark-style.css','css/data/img/bg.webp':'frontend/css/data/img/bg.webp','css/data/fonts/HuWenMingChaoTi.woff2':'frontend/css/data/fonts/HuWenMingChaoTi.woff2'};
 for (const [target, from] of Object.entries(assets)) { await mkdir(dirname(resolve(out,target)),{recursive:true}); await copyFile(resolve(root,from),resolve(out,target)); }
 await build({ stdin:{contents:`import app from './worker/src/student-portal.js';export default {fetch(request,env){return app.fetch(request,{...env,STUDENT_LOGIN_TEST_ENABLED:env.STUDENT_LOGIN_TEST_ENABLED??'true'})}}`,resolveDir:root,sourcefile:'student-preview-entry.js'},

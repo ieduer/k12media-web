@@ -164,6 +164,6 @@ export async function beginStudentLogin({ username, password }, { fetcher = fetc
   // complete official form login and verify the resulting student actor before
   // minting any session or allowing exam/image/chat access. No raw DTO/password.
   return { state: 'selection_required', authenticated: false,
-    selections: found.map(row=>({schoolId:String(row.schoolId),classId:String(row.classId)})),
+    selections: found.map(row=>({schoolId:String(row.schoolId),classId:String(row.classId),...(/^\d+$/.test(String(row.userId))?{userId:String(row.userId)}:{})})),
     sourceCookies: [...jar].map(([key,value])=>`${key}=${value}`).join('; ') };
 }

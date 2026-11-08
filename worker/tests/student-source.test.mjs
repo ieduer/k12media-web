@@ -30,8 +30,8 @@ test('lookup success is never an authenticated session and strips returned priva
   const responses=[page,reply('"SESSION"'),reply('[{type:1,schoolId:3600,classId:123,password:"source-private",userId:777,name:"private-name"}]',2)];
   const out=await beginStudentLogin({username:'sample',password:'sample'},{fetcher:()=>new Response(responses.shift())});
   assert.equal(out.authenticated,false);assert.equal(out.state,'selection_required');
-  assert.deepEqual(out.selections,[{schoolId:'3600',classId:'123'}]);
-  assert.ok(!JSON.stringify(out).includes('private'));assert.ok(!JSON.stringify(out).includes('777'));
+  assert.deepEqual(out.selections,[{schoolId:'3600',classId:'123',userId:'777'}]);
+  assert.ok(!JSON.stringify(out).includes('private')); // Trusted ID stays in the sealed server session only.
 });
 test('source redirects and rate limits stop without following or retrying',async()=>{
   for(const status of [302,429]){

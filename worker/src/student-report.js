@@ -5,7 +5,7 @@ const tags=new Set('html head body title div span p br hr section article main h
 const attrs=new Set(['class','id','title','alt','colspan','rowspan','width','height','align','valign','role','scope']);
 export const reportHeaders={
  'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store, private','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer',
- 'Content-Security-Policy':"default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-same-origin"
+ 'Content-Security-Policy':"default-src 'none'; img-src 'self'; style-src 'self' 'unsafe-inline'; base-uri 'none'; form-action 'none'; frame-ancestors 'self'; sandbox allow-same-origin allow-downloads"
 };
 export function cleanCss(css){return css.replace(/@import[^;]*(?:;|$)/gi,'').replace(/url\([^)]*\)/gi,'none').replace(/expression\([^)]*\)/gi,'').replace(/(?:behavior|-moz-binding)\s*:[^;}]+[;}]?/gi,'');}
 export async function renderReport(html,{session,examId,paperId,capability}){
@@ -20,6 +20,7 @@ export async function renderReport(html,{session,examId,paperId,capability}){
    for(const [k,v] of Object.entries(original))if(attrs.has(k)&&v.length<512)e.setAttribute(k,v);
    if(original.style&&original.style.length<2048&&!/[\\@<>]|url|expression|behavior|binding|image-set/i.test(original.style))e.setAttribute('style',original.style);
    if(tag==='head')e.append('<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/css/report.css">',{html:true});
+   if(tag==='body')e.setAttribute('data-paper-report',paperId?'subject':'exam');
    if(tag==='body'&&imageLink)e.prepend('<nav class="paper-toolbar"><a href="'+escapeHtml(imageLink)+'">查看我的答卷</a></nav>',{html:true});
    if(tag==='a'){
      const fields=parseSubjectCall(original.href,examId,session.schoolId);

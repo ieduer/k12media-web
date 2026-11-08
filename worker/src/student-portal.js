@@ -51,7 +51,7 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
     }
    }
    phase='form_and_home';const login=await finishStudentLogin(data,selected,choice,{fetcher});
-   const session={kind:'session',nonce:receipt,exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId,knownExamCount:login.home.exams.length};
+   const session={kind:'session',nonce:receipt,exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId,userId:login.userId,knownExamCount:login.home.exams.length};
    const token=await seal(session,secret,audience);
    await env.STUDENT_VERIFICATION.put('catalog/'+session.nonce,await seal({kind:'catalog',nonce:session.nonce,exp:session.exp,home:login.home},secret,audience),{expirationTtl:7200});
    await recordVerification(env,receipt,'result',{origin:audience,code:'authenticated',status:200,sessionToken:token,expiresAt:session.exp,examCount:login.home.exams.length});
@@ -75,8 +75,8 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
    }
    return json(await homeResponse(home,session,secret,audience));
   }
-  if(!['exam','exam-data','subject','subject-images','images','asset'].includes(route))return json({code:'not_found'},404);
-  const kind=route==='exam-data'?'exam':route==='subject-images'?'subject':route;
+  if(!['exam','exam-data','subject','subject-images','subject-images-data','images','asset'].includes(route))return json({code:'not_found'},404);
+  const kind=route==='exam-data'?'exam':['subject-images','subject-images-data'].includes(route)?'subject':route;
   const ticket=await unseal(url.searchParams.get('ticket'),secret,audience,kind,session.nonce);
   const capability=(kind,fields)=>seal({kind,nonce:session.nonce,exp:session.exp,...fields},secret,audience);
   if(route==='exam-data'){
@@ -84,24 +84,26 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
    const parsed=await extractSubjectResults(html,ticket.examId,session.schoolId);
    const subjects=await Promise.all(parsed.map(async ({fields,...score})=>{
     const cap=await capability('subject',{examId:ticket.examId,fields});
-    return {...score,reportUrl:'/api/student/subject?ticket='+cap,imagesUrl:'/api/student/subject-images?ticket='+cap};
+    return {...score,id:fields.paperId,reportUrl:'/api/student/subject?ticket='+cap,imagesUrl:'/api/student/subject-images?ticket='+cap,imagesDataUrl:'/api/student/subject-images-data?ticket='+cap};
    }));
    const scored=subjects.filter(s=>s.score!==null&&s.maxScore!==null);
    return json({subjects,totals:{score:scored.reduce((sum,s)=>sum+s.score,0),maxScore:scored.reduce((sum,s)=>sum+s.maxScore,0),published:scored.length},reportUrl:'/api/student/exam?ticket='+url.searchParams.get('ticket')});
   }
   if(route==='exam')return await renderReport(await loadExamReport(session,ticket.examId,{fetcher}),{session,examId:ticket.examId,capability});
   let imageFields;
-  if(route==='subject'||route==='subject-images'){
+  if(['subject','subject-images','subject-images-data'].includes(route)){
+   if(session.userId&&ticket.fields.userId!==session.userId)throw new StudentSourceError('source_identity_unconfirmed',403);
    const html=await sourceRequest('/tqweb/report/SubjectReportSmallPointsAction.a?showSubjectStudentReport',session,{body:new URLSearchParams({...ticket.fields,schoolIdStr:''}).toString(),fetcher});
    if(!html.includes('findStudentImgJs'))throw new StudentSourceError('source_report_unavailable');
    if(route==='subject')return await renderReport(html,{session,examId:ticket.examId,paperId:ticket.fields.paperId,capability});
    imageFields=await extractImageForm(html,ticket.examId,ticket.fields.paperId);
    if(!imageFields)throw new StudentSourceError('source_images_unavailable',404);
   }
-  if(route==='images'||route==='subject-images'){
+  if(['images','subject-images','subject-images-data'].includes(route)){
    const html=await sourceRequest('/tqweb/report/ShowStudentImgsAction.a?findStudentImgs',session,{body:new URLSearchParams(imageFields||ticket.fields).toString(),fetcher});
    const images=await extractImages(html,ticket.examId);if(!images.length)throw new StudentSourceError('source_images_unavailable',404);
    const links=await Promise.all(images.map(async raw=>'/api/student/asset?ticket='+await capability('asset',{examId:ticket.examId,...allowedAsset(raw,ticket.examId)})));
+   if(route==='subject-images-data')return json({pages:links.map((href,i)=>({order:i+1,url:href,downloadUrl:href+'&download=1'}))});
    return new Response('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>我的答卷</title><link rel="stylesheet" href="/css/report.css"></head><body><h1>我的答卷</h1>'+links.map((href,i)=>'<figure><a href="'+escapeHtml(href)+'" download="答卷-'+(i+1)+'"><img class="answer-page" src="'+escapeHtml(href)+'" alt="答卷第 '+(i+1)+' 页" loading="lazy"></a><figcaption>第 '+(i+1)+' 页</figcaption></figure>').join('')+'</body></html>',{headers:reportHeaders});
   }
   const asset=allowedAsset(ticket.url,ticket.examId);if(!asset||asset.type!==ticket.type)throw new StudentSourceError('invalid_asset',403);
@@ -115,7 +117,8 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
   const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
   const actual=bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'image/jpeg':bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71?'image/png':new TextDecoder().decode(bytes.slice(0,6)).match(/^GIF8[79]a$/)?'image/gif':new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP'?'image/webp':null;
   if(!actual)throw new StudentSourceError('source_asset_not_image');
-  return new Response(bytes,{headers:{...headers,'Content-Type':actual,'Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'}});
+  const extension={'image/jpeg':'jpg','image/png':'png','image/gif':'gif','image/webp':'webp'}[actual];
+  return new Response(bytes,{headers:{...headers,'Content-Type':actual,'Content-Disposition':url.searchParams.get('download')==='1'?`attachment; filename="answer.${extension}"`:'inline','Cross-Origin-Resource-Policy':'same-origin'}});
  }catch(e){const code=e instanceof StudentSourceError?e.code:'source_unavailable';const status=e instanceof StudentSourceError?e.status:502;
   if(recorded&&code!=='verification_storage_unavailable')try{await recordVerification(env,receipt,'result',{origin:audience,code,status,phase});}catch{console.log(JSON.stringify({event:'student_verification_storage_failed',receipt}));}
   console.log(JSON.stringify({event:'student_request_failed',receipt,phase,code,status}));

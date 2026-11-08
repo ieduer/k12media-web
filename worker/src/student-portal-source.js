@@ -30,7 +30,7 @@ export async function finishStudentLogin(credentials,selected,choice,{fetcher=fe
  if(![302,303].includes(r.status))fail('source_login_outcome_unknown');
  const state={cookies};
  const home=await loadStudentHome(state,{fetcher});
- return {cookies:state.cookies,schoolId:choice.schoolId,classId:choice.classId,home};
+ return {cookies:state.cookies,schoolId:choice.schoolId,classId:choice.classId,userId:choice.userId,home};
 }
 export {beginStudentLogin};
 export async function loadStudentHome(session,{fetcher=fetch}={}){
@@ -42,14 +42,19 @@ export async function loadStudentHome(session,{fetcher=fetch}={}){
 }
 export async function parseHome(html){
  if(!html.includes('ChangePasswordAction')||!html.includes('j_acegi_logout'))fail('source_identity_unconfirmed',401);
- const exams=[],seen=new Set(),allFilters={};let name='',select='',option=null;
+ const exams=[],seen=new Set(),allFilters={},titles=[];let name='',select='',option=null,title=null;
  // Capture text per matching anchor without relying on source presentation classes.
  let current=null;
  const rewriter=new HTMLRewriter().on('a',{element(e){const h=e.getAttribute('href')||'';const m=h.match(/^javascript:viewTest\(\s*['"]\/tqweb\/report\/NewStudentReport\.a\?showStudentScoreReport['"]\s*,\s*(\d+)\s*\);?$/);current=null;if(m&&!seen.has(m[1])){seen.add(m[1]);current={id:m[1],title:''};exams.push(current);}e.onEndTag(()=>{current=null;});},text(t){if(current)current.title+=t.text;}}).on('a[href*="ChangePasswordAction"]',{text(t){name+=t.text;}});
+ rewriter.on('.text_15',{element(e){title={text:''};titles.push(title);e.onEndTag(()=>title=null);},text(t){if(title)title.text+=t.text;}});
  rewriter.on('form#frm select',{element(e){const key=e.getAttribute('name');select=['schoolYearId','testSemester'].includes(key)?key:'';e.onEndTag(()=>select='');}}).on('form#frm option',{element(e){option={name:select,value:e.getAttribute('value')||'',label:''};e.onEndTag(()=>{if(option?.name&&/全部|所有|不限/.test(option.label))allFilters[option.name]=option.value;option=null;});},text(t){if(option)option.label+=t.text;}});
  await rewriter.transform(new Response(html)).text();
  if(exams.length>500)fail('source_schema_changed');
- return {name:name.replace(/\s+/g,' ').trim().slice(0,128),allFilters,exams:exams.map(e=>({id:e.id,title:e.title.replace(/\s+/g,' ').trim()||'考试'}))};
+ // The current source renders titles and report buttons in two aligned columns.
+ // Use that order only when every button has exactly one nonempty title.
+ const names=titles.map(t=>t.text.replace(/\s+/g,' ').trim());
+ const aligned=names.length===exams.length&&names.every(Boolean);
+ return {name:/修改密码|修改密碼/.test(name)?'':name.replace(/\s+/g,' ').trim().slice(0,128),allFilters,exams:exams.map((e,i)=>({id:e.id,title:aligned?names[i]:(e.title.replace(/查看报告|查看報告/g,'').replace(/\s+/g,' ').trim()||'考试 '+e.id)}))};
 }
 export async function loadExamReport(session,examId,{fetcher=fetch}={}){
  if(!/^\d+$/.test(examId))fail('invalid_request',400);
@@ -61,6 +66,7 @@ export async function loadExamReport(session,examId,{fetcher=fetch}={}){
  await sourceRequest('/tqweb/report/NewStudentReport.a?showStudentScoreReport',session,{body:new URLSearchParams({testId:examId,schoolIdStr:''}).toString(),fetcher});
  const html=await sourceRequest('/tqweb/report/NewStudentReport.a?doShowStudentReport&test_id='+examId,session,{body:'',fetcher});
  if(!html.includes('CHENGJIDAN'))fail('source_report_unavailable');
+ if(session.userId){const rows=await extractSubjectResults(html,examId,session.schoolId);if(!rows.length||rows.some(row=>row.fields.userId!==session.userId))fail('source_identity_unconfirmed');}
  return html;
 }
 const subjectKeys=['paperId','subjectName','score','scoreTotal','levelId','levelName','userId','userType','name','userName','schoolId','schoolName','testId','className','testScoreLevel'];

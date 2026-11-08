@@ -1,3 +1,38 @@
+## Current student portal candidate — 2026-11-08T11:43Z
+
+Public paper.bdfz.net currently uses accepted student source226fc29 and immutable
+preview7b65856c; legacy master/Pages canonical deployment is a separate historical
+surface. The next student release is this branch, codex/paper-student-20261107,
+through the registered exact-source preview/DNS transaction, never legacy master.
+
+The candidate adds automatically loaded all-exam subject scores, embedded/list
+views, per-exam and full-history AI ZIP (JSON, CSV, report text/tables and original
+images), all answer-page previews/zoom/download, and centered source reports.
+Titles use the source's aligned title/button columns only with equal cardinality.
+Sealed source student IDs must match report IDs before issuing data or handles.
+No R2, score writes or teacher credential is added to the student bundle.
+
+Actual authorized-account reads passed16 own exams,16 full and37 subject reports,
+28 original answer images; all37 report identities match the authenticated actor.
+Browser ZIP has386 files,53 reports and208 decoded images (28 answer+180 chart),
+11931457 bytes. Source explicitly lacks23 subject answer sets; manifest remains
+incomplete and names those gaps. One image500 recovered on one exact retry.
+Browser embedded/list, report width and original-size zoom passed. Local33 unit
+checks plus11 workerd test groups passed; isolated edge and public promotion are
+still separate gates. Evidence: CF reports/operations/paper-student-20261107-01a1b986/completion.
+
+The referenced Mark thread proves read-only question images, not universal full
+scores/images. The same configured account reads a592-row roster and real question
+image for known paper51767; GetPaperScore/full-info and original-file management
+reads are denied. Old TQMS SSO returns to login; the current tqweb school-teacher
+lookup rejects the credentials. Automatic retries stopped, no permission changes.
+The teacher bridge remains unenabled pending a verified authenticated source path.
+The dedicated encrypted student vault has3 prior inputs, all the test account;
+no independent preparatory student has submitted since capture was enabled.
+Student-led preparatory acceptance and Status remain pending, not passed.
+
+Earlier sections below are historical and superseded where this section differs.
+
 # K12Media viewer operations authority
 
 Reviewed: 2026-09-07 PDT / September 8 UTC. Owner: suen. Lifecycle: protected

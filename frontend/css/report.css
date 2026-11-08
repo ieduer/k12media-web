@@ -1,1 +1,9 @@
 html{color-scheme:light;background:#fff}body{margin:0;padding:20px;color:#29342f;font:15px/1.8 system-ui,-apple-system,"PingFang SC",sans-serif;overflow:auto}a{color:#476652;text-decoration:underline;text-underline-offset:3px;cursor:pointer}table{border-collapse:collapse;max-width:100%;margin:16px 0}th,td{padding:8px;border:1px solid #e0e4df}img{max-width:100%;object-fit:contain}h1{font-size:24px}figure{margin:24px 0}figcaption{text-align:center;color:#69776d}.answer-page{display:block;margin:auto;height:auto}.paper-toolbar{position:sticky;top:0;z-index:2;background:#fffdf6;padding:12px 20px;border:1px solid #dce2d9;border-radius:8px;margin-bottom:20px}.paper-toolbar a{font-weight:600}@media(max-width:600px){body{padding:12px}}
+/* The upstream report reserves 436px for its old navigation and uses a 1440px
+   minimum canvas. Keep the 800px report content, remove that navigation gutter. */
+body[data-paper-report="exam"]{padding:16px!important;background:#fff!important;box-sizing:border-box;width:832px;max-width:none;margin:0 auto!important}
+body[data-paper-report="exam"] .page{min-width:0!important;width:800px!important;background:#fff!important}
+body[data-paper-report="exam"] #meunDiv,body[data-paper-report="exam"] .section_2{display:none!important}
+body[data-paper-report="exam"] .section_5{position:static!important;top:auto!important;left:auto!important;width:800px!important;margin:0!important}
+body[data-paper-report="exam"] .group_12{position:relative!important;margin:0!important;width:800px!important;left:auto!important;top:auto!important}
+body[data-paper-report="subject"]{margin:0 auto!important}
