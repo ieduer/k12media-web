@@ -1,67 +1,18 @@
-## Current accepted student portal and teacher-source blocker — 2026-11-08T12:43:12.889364+00:00
+## Current accepted student portal and Yue bridge gate — 2026-11-08T13:49:58.139952+00:00
 
-https://paper.bdfz.net serves source `0fafb9fafdb305ed4c8fa4a27d0d113b16d285b7`
-from `ieduer/k12media-web`, branch `codex/paper-student-20261107`, deployment
-`9f6e7eac-67b9-4075-8db0-7475b570cd08`, effective 2026-11-08T11:58:40.654687Z.
-Public alias `paper-student-exports-202611.k12media-web.pages.dev` is production:
-do not overwrite it with candidate uploads. Legacy master/canonical Pages and
-old disabled Worker remain separate historical surfaces. The registered one-use
-preview/DNS transaction governs this branch. Rollback alias:
-`paper-student-fixed-20261108.k12media-web.pages.dev` (source226fc29).
+`paper.bdfz.net` remains on accepted runtime source `0fafb9fafdb305ed4c8fa4a27d0d113b16d285b7`, Pages `9f6e7eac-67b9-4075-8db0-7475b570cd08`, effective 2026-11-08T11:58:40.654687Z. Canonical source is `ieduer/k12media-web`, branch `codex/paper-student-20261107`; public alias `paper-student-exports-202611.k12media-web.pages.dev`; rollback `paper-student-fixed-20261108.k12media-web.pages.dev`. Legacy master/canonical Pages and disabled old Worker remain separate. No new business runtime or bindings were deployed in this continuation.
 
-All exams automatically show subject scores in embedded/list views. Per-exam and
-all-history ZIP include JSON/CSV, report text/tables/HTML/charts and original answer
-images. Reports fit/center; all answer pages preview, zoom and download at source
-resolution. Source student IDs must match sealed session actor before capabilities
-are issued. Images have a30-second stream deadline and one transient read retry;
-login submissions are never automatically replayed. No data is transferred to R2.
+Accepted: all16 own exams,53 reports,28 answer originals; embedded/list scores, centered reports, original previews/HD downloads, per-exam/all AI ZIP386 entries. The source did not return23 subject answer sets; the cause is unproven, so do not label them definitely unarchived or unpublished. No R2. Encrypted login verification input/results retain the existing7-day policy; entry has no fixed expiry and sessions/catalogs last2hours. Independent preparatory-student acceptance is still pending.
 
-Actual account acceptance:16 exams,16 full reports,37 subject reports,28 original
-answer pages. ZIP386 entries/11931457 bytes; all208 images decoded (28 answer and
-180 report charts), CRC and credential/URL exclusion passed. Source explicitly
-lacks23 subject answer sets; ZIP manifest lists them and remains incomplete.
-Desktop/mobile embedded/list, report fit and original-size zoom passed.33 focused
-unit checks and12 workerd groups passed. Latest isolated and public real login,
-grade/full/subject/image-data/HD attachment paths passed; all12 public assets match.
+[Public update](https://status.bdfz.net/?update=paper-history-downloads-20261108&revision=1) is now published and verified in immutable API readback, rendered browser page and global/paper RSS. The registered Status tool independently validates the accepted public Pages/DNS channel and preserves the legacy canonical deployment. Source/config/DNS and12 public asset hashes matched. Publication evidence and rollback are in the single report below. This supersedes earlier Status-pending entries.
 
-New login inputs/results are encrypted in dedicated verification KV for7 days;
-private decryption key stays in the operator secret store. Latest vault readback
-has5 inputs, all the authorized test account. There is no
-independent preparatory-student submission to accept. The test student is not
-preparatory and correctly has no Haidian midterm. Entry has no fixed expiry;
-sealed student sessions/catalogs last2 hours.
+Latest user direction is Yue direct, not TQMS. Existing teacher login succeeded once, and live `GetAllTestInfo` returned17 tests/38 papers. Three dynamically selected source papers52118/52119/52120 returned permission denial from `GetPaperScore`. For52118 the source also denied `GetAnswerPaperStatusInfo`, `GetItemGroupImageSummaryInfo`, `GetAnswerPaperMissing` and `DownloadInkSynthesis`; zero student records, score rows or image files were returned. These were source-issued current candidates, not fixed historical IDs. Do not replay these denied targets without changed access evidence.
 
-Teacher supplement remains unaccepted after historical-paper checks. Source SSO
-identity lookup accepted the existing owner credential, but both the original and
-corrected service-provider-initiated callback ended at the teacher application's
-login error page. The displayed error is generic username/password rejection; it
-does not establish that the same credential is invalid in the student or Yue
-systems. No further teacher-analysis login replay is allowed without new evidence.
-Historical TQMS test137797/subject1/class94856 exports returned upstream302 for
-both primary and cron sources, so neither produced grades. Mark historical
-paper50473/test10644 returned zero pages with timeout in both current-session and
-verified-readonly-env modes. Its archived task route returned423 before source
-access; archive locks were preserved. The exact item-group945018 records route
-returned500/AbortError. Historical receipts identify real existing papers but do
-not establish current source access. No teacher adapter was enabled, no production
-release or source score/role/password change was made, and no data moved to R2.
+`teacher-yue.js` is an unmounted candidate adapted from Mark34ad49b: bounded source-only catalog, same-session score cache, original-image metadata and download, exact source StudentID checks, no historical/R2 fallback, no guessed filenames or name-only authorization. Five focused tests and browser-target bundling passed. It has not passed real grade/image acceptance and must not be enabled in the student router. A visible catalog is not proof of score permissions; a synthesized roster is not grade data. Cross-source student identity mapping is still required before public projection.
 
-The user has superseded waiting for new papers: validate against existing history.
-Student-owned reads remain the accepted path; only missing components may be
-supplemented after exact source user ID plus school/class agreement. Name-only
-matching is forbidden. Teacher failure must preserve student data and login.
-The blocking next step is a demonstrably readable teacher source session/route,
-followed by same-student grade/report/full-image acceptance. New student login
-attempts cannot resolve the current teacher-source failure.
+The earlier TQMS candidate is superseded and retained only as a source patch in the evidence directory. Local teacher lookup rejected; later SSO schema recovery hit a DWR batch exception before form submission and was closed when the user switched routes. No TQMS adapter is active.
 
-Student-led preparatory acceptance remains pending. Status for the earlier
-accepted student release remains pending its registered preview/DNS channel
-support; no teacher-success update is publishable. See the
-[historical-source diagnosis](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/teacher-history/REPORT.md).
-
-Current evidence and remaining work:
-[release report](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/completion/REPORT.md).
-Earlier sections below are historical and superseded where this summary differs.
+Evidence/source-patch retention: `retain_hot`, owner01a1b986, review2026-12-08; temporary worktrees/dependencies/builds are removed at closeout. [Single report](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/student-release/REPORT.md). Older entries below are historical and superseded where this summary differs.
 
 
 # K12Media viewer project state
