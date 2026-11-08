@@ -1,4 +1,4 @@
-## Current accepted student portal — 2026-11-08T12:05:29.504457+00:00
+## Current accepted student portal and teacher-source blocker — 2026-11-08T12:43:12.889364+00:00
 
 https://paper.bdfz.net serves source `0fafb9fafdb305ed4c8fa4a27d0d113b16d285b7`
 from `ieduer/k12media-web`, branch `codex/paper-student-20261107`, deployment
@@ -31,21 +31,33 @@ independent preparatory-student submission to accept. The test student is not
 preparatory and correctly has no Haidian midterm. Entry has no fixed expiry;
 sealed student sessions/catalogs last2 hours.
 
-Teacher live bridge remains disabled: existing Mark owner session is authenticated,
-but its same-paper score route returns502 paper_score_failed. The configured
-readonly whole-paper route returns200 with imageKind=timeout and zero pages.
-Direct owner source reads verify a592-row roster and one real question image;
-full-paper management downloads and grades are not accepted. Question images and
-catalog access do not establish full grade/physical-page access. No source score,
-permission, password or Mark production change was made. Student-led preparatory
-acceptance and Status remain pending. Status publisher currently requires canonical
-accepted authority and cannot represent this separately accepted preview/DNS channel.
+Teacher supplement remains unaccepted after historical-paper checks. Source SSO
+identity lookup accepted the existing owner credential, but both the original and
+corrected service-provider-initiated callback ended at the teacher application's
+login error page. The displayed error is generic username/password rejection; it
+does not establish that the same credential is invalid in the student or Yue
+systems. No further teacher-analysis login replay is allowed without new evidence.
+Historical TQMS test137797/subject1/class94856 exports returned upstream302 for
+both primary and cron sources, so neither produced grades. Mark historical
+paper50473/test10644 returned zero pages with timeout in both current-session and
+verified-readonly-env modes. Its archived task route returned423 before source
+access; archive locks were preserved. The exact item-group945018 records route
+returned500/AbortError. Historical receipts identify real existing papers but do
+not establish current source access. No teacher adapter was enabled, no production
+release or source score/role/password change was made, and no data moved to R2.
 
-User clarification at 2026-11-08T12:07:29.954289+00:00: a usable source paper may not exist yet.
-Keep teacher integration pending source availability; no repeated student login
-is requested. The cause of unavailable teacher data is not yet established.
+The user has superseded waiting for new papers: validate against existing history.
+Student-owned reads remain the accepted path; only missing components may be
+supplemented after exact source user ID plus school/class agreement. Name-only
+matching is forbidden. Teacher failure must preserve student data and login.
+The blocking next step is a demonstrably readable teacher source session/route,
+followed by same-student grade/report/full-image acceptance. New student login
+attempts cannot resolve the current teacher-source failure.
 
-Student-first integration policy confirmed by user: use the authenticated student source for every available exam, grade, report and image. Teacher reads may supplement only missing real-time exams or missing components, never replace accepted student data or block student login. Teacher results require exact authenticated source student ID plus school/class agreement; a name match is insufficient. Teacher errors preserve all student-source results. No R2 transfer. Teacher adapter activation remains pending an authenticated source path that returns verifiable grades and full answer pages.
+Student-led preparatory acceptance remains pending. Status for the earlier
+accepted student release remains pending its registered preview/DNS channel
+support; no teacher-success update is publishable. See the
+[historical-source diagnosis](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/teacher-history/REPORT.md).
 
 Current evidence and remaining work:
 [release report](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/completion/REPORT.md).
