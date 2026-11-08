@@ -53,6 +53,7 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
    phase='form_and_home';const login=await finishStudentLogin(data,selected,choice,{fetcher});
    const session={kind:'session',nonce:receipt,exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId,knownExamCount:login.home.exams.length};
    const token=await seal(session,secret,audience);
+   await env.STUDENT_VERIFICATION.put('catalog/'+session.nonce,await seal({kind:'catalog',nonce:session.nonce,exp:session.exp,home:login.home},secret,audience),{expirationTtl:7200});
    await recordVerification(env,receipt,'result',{origin:audience,code:'authenticated',status:200,sessionToken:token,expiresAt:session.exp,examCount:login.home.exams.length});
    // Verification receipt only: never account, password, cookie, or source data.
    console.log(JSON.stringify({event:'student_login_verified',receipt:session.nonce,examCount:login.home.exams.length}));
@@ -66,8 +67,12 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
   if(!hasAffinity(session.cookies))throw new StudentSourceError('session_expired',401);
   context.session=session;context.initialCookies=session.cookies;phase=route;
   if(route==='me'){
-   const home=await loadStudentHome(session,{fetcher});
-   if(!home.exams.length&&session.knownExamCount>0)throw new StudentSourceError('source_catalog_unavailable');
+   let home=await loadStudentHome(session,{fetcher});
+   if(!home.exams.length&&session.knownExamCount>0){
+    const saved=await env.STUDENT_VERIFICATION.get('catalog/'+session.nonce);
+    if(!saved)throw new StudentSourceError('source_catalog_unavailable');
+    home=(await unseal(saved,secret,audience,'catalog',session.nonce,524288)).home;
+   }
    return json(await homeResponse(home,session,secret,audience));
   }
   if(!['exam','exam-data','subject','subject-images','images','asset'].includes(route))return json({code:'not_found'},404);
@@ -100,16 +105,16 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
    return new Response('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>我的答卷</title><link rel="stylesheet" href="/css/report.css"></head><body><h1>我的答卷</h1>'+links.map((href,i)=>'<figure><a href="'+escapeHtml(href)+'" download="答卷-'+(i+1)+'"><img class="answer-page" src="'+escapeHtml(href)+'" alt="答卷第 '+(i+1)+' 页" loading="lazy"></a><figcaption>第 '+(i+1)+' 页</figcaption></figure>').join('')+'</body></html>',{headers:reportHeaders});
   }
   const asset=allowedAsset(ticket.url,ticket.examId);if(!asset||asset.type!==ticket.type)throw new StudentSourceError('invalid_asset',403);
-  const r=await fetcher(asset.url,{redirect:'manual',signal:AbortSignal.timeout(30000),headers:asset.url.startsWith('https://test.k12media.cn:8000/')?{Cookie:session.cookies}:{},cache:'no-store'});
+  let r;try{r=await fetcher(asset.url,{redirect:'manual',signal:AbortSignal.timeout(60000),headers:asset.url.startsWith('https://test.k12media.cn:8000/')?{Cookie:session.cookies}:{},cache:'no-store'});}catch(e){throw new StudentSourceError(e.name==='TimeoutError'?'source_asset_timeout':'source_asset_transport_failed');}
   if(asset.url.startsWith('https://test.k12media.cn:8000/'))session.cookies=mergeSourceCookies(session.cookies,r.headers);
-  if(!r.ok){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}
+  if(!r.ok){await r.body?.cancel();throw new StudentSourceError('source_asset_http_'+r.status);}
   const type=r.headers.get('Content-Type')?.split(';')[0].toLowerCase();
   if(asset.type==='css'){if(type!=='text/css'){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}return new Response(cleanCss(await boundedText(r,512*1024)),{headers:{...headers,'Content-Type':'text/css; charset=utf-8'}});}
   const reader=r.body.getReader(),chunks=[];let size=0;
   while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>25*1024*1024){await reader.cancel();throw new StudentSourceError('source_response_too_large');}chunks.push(value);}
   const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
   const actual=bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'image/jpeg':bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71?'image/png':new TextDecoder().decode(bytes.slice(0,6)).match(/^GIF8[79]a$/)?'image/gif':new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP'?'image/webp':null;
-  if(!actual)throw new StudentSourceError('source_asset_unavailable');
+  if(!actual)throw new StudentSourceError('source_asset_not_image');
   return new Response(bytes,{headers:{...headers,'Content-Type':actual,'Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'}});
  }catch(e){const code=e instanceof StudentSourceError?e.code:'source_unavailable';const status=e instanceof StudentSourceError?e.status:502;
   if(recorded&&code!=='verification_storage_unavailable')try{await recordVerification(env,receipt,'result',{origin:audience,code,status,phase});}catch{console.log(JSON.stringify({event:'student_verification_storage_failed',receipt}));}

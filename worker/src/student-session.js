@@ -9,9 +9,9 @@ export async function seal(value, secret, audience) {
   const data=await crypto.subtle.encrypt({name:'AES-GCM',iv,additionalData:enc.encode(audience)},key,enc.encode(JSON.stringify(value)));
   return encode(iv)+'.'+encode(new Uint8Array(data));
 }
-export async function unseal(token, secret, audience, kind, nonce) {
+export async function unseal(token, secret, audience, kind, nonce, maxLength=12000) {
   try {
-    if (!secret || secret.length<32 || typeof token!=='string' || token.length>12000 || !/^[\w-]+\.[\w-]+$/.test(token)) throw Error();
+    if (!secret || secret.length<32 || typeof token!=='string' || token.length>maxLength || !/^[\w-]+\.[\w-]+$/.test(token)) throw Error();
     const [iv,data]=token.split('.').map(decode);
     const key=await crypto.subtle.importKey('raw',await crypto.subtle.digest('SHA-256',enc.encode(secret)), 'AES-GCM',false,['decrypt']);
     const value=JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM',iv,additionalData:enc.encode(audience)},key,data)));
