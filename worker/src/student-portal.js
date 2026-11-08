@@ -15,7 +15,7 @@ export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={})
  if(!secret)return json({code:'service_unavailable'},503);
  if(!['GET','POST'].includes(request.method))return json({code:'method_not_allowed'},405);
  if(request.headers.get('Sec-Fetch-Site')==='cross-site'||(request.method==='POST'&&request.headers.get('Origin')!==audience))return json({code:'origin_refused'},403);
- let data;
+ let data,phase='request';const receipt=crypto.randomUUID();
  try{
   if(route==='login'||route==='login-check'){
    if(request.method!=='POST')return json({code:'method_not_allowed'},405);
@@ -30,13 +30,13 @@ export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={})
     selected=pending.selected;choice=selected.selections[Number(data.choice)];if(!choice)throw new StudentSourceError('invalid_selection',400);
    }else{
     if(!await limiter(request,data.username))return json({code:'source_rate_limited'},429);
-    selected=await beginStudentLogin(data,{fetcher});choice=selected.selections[0];
+    phase='account_lookup';selected=await beginStudentLogin(data,{fetcher});choice=selected.selections[0];
     if(selected.selections.length!==1){
      const account=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(data.username.trim())))).join(',');
      return json({state:'selection_required',selection:await seal({kind:'selection',exp:Date.now()+120000,account,selected},secret,audience),choices:selected.selections.map((s,i)=>({index:i,label:`学校 ${s.schoolId} · 班级 ${s.classId}`}))});
     }
    }
-   const login=await finishStudentLogin(data,selected,choice,{fetcher});
+   phase='form_and_home';const login=await finishStudentLogin(data,selected,choice,{fetcher});
    const session={kind:'session',nonce:crypto.randomUUID(),exp:Date.now()+7200000,cookies:login.cookies,schoolId:login.schoolId,classId:login.classId};
    const token=await seal(session,secret,audience);
    // Verification receipt only: never account, password, cookie, or source data.
@@ -70,8 +70,9 @@ export async function handlePortal(request,env,{fetcher=fetch,limiter=limit}={})
   if(!['image/png','image/jpeg','image/gif','image/webp'].includes(type)){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}
   return new Response(r.body,{headers:{...headers,'Content-Type':type,'Content-Disposition':'inline','Cross-Origin-Resource-Policy':'same-origin'}});
  }catch(e){const code=e instanceof StudentSourceError?e.code:'source_unavailable';const status=e instanceof StudentSourceError?e.status:502;
+  console.log(JSON.stringify({event:'student_request_failed',receipt,phase,code,status}));
   if(['exam','subject','images'].includes(route))return new Response('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/css/report.css"><p>'+escapeHtml(code==='session_expired'?'登录已过期，请重新登录。':code==='source_images_unavailable'?'源站暂未提供这份答卷。':'暂时无法读取报告，请稍后重新打开。')+'</p>',{status,headers:reportHeaders});
-  return json({code},status);
+  return json({code,receipt},status);
  }finally{if(data){data.password='';data.username='';}}
 }
 async function homeResponse(home,session,secret,audience){return {authenticated:true,name:home.name,receipt:session.nonce,expiresAt:session.exp,exams:await Promise.all(home.exams.map(async e=>({title:e.title,url:'/api/student/exam?ticket='+await seal({kind:'exam',examId:e.id,nonce:session.nonce,exp:session.exp},secret,audience)})))};}

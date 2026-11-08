@@ -6,10 +6,10 @@ export function mergeCookies(previous,headers){
   for(const value of values){const m=value.match(/^(JSESSIONID|DWRSESSIONID)=([A-Za-z0-9_.!~+\/-]{1,256})(?:;|$)/);if(m)jar.set(m[1],m[2]);}
   return [...jar].filter(([k])=>['JSESSIONID','DWRSESSIONID'].includes(k)).map(([k,v])=>k+'='+v).join('; ');
 }
-export async function sourceRequest(path,cookies,{body,fetcher=fetch,maxBytes=4*1024*1024}={}){
+export async function sourceRequest(path,cookies,{body,fetcher=fetch,maxBytes=4*1024*1024,contentType='application/x-www-form-urlencoded'}={}){
   const u=new URL(path,STUDENT_ORIGIN);if(u.origin!==STUDENT_ORIGIN || !u.pathname.startsWith('/tqweb/'))fail('source_origin_refused');
   let r;
-  try{r=await fetcher(u.href,{method:body===undefined?'GET':'POST',body,redirect:'manual',signal:AbortSignal.timeout(30000),cache:'no-store',headers:{Cookie:cookies,Origin:STUDENT_ORIGIN,Referer:STUDENT_ORIGIN+'/tqweb/demo/MainAction.a?loginDispatcher','Content-Type':'application/x-www-form-urlencoded'}});}catch{fail('source_transport_failed');}
+  try{r=await fetcher(u.href,{method:body===undefined?'GET':'POST',body,redirect:'manual',signal:AbortSignal.timeout(30000),cache:'no-store',headers:{Cookie:cookies,Origin:STUDENT_ORIGIN,Referer:STUDENT_ORIGIN+'/tqweb/demo/MainAction.a?loginDispatcher','Content-Type':contentType}});}catch{fail('source_transport_failed');}
   if(r.status===302||r.status===303){await r.body?.cancel();fail('session_expired',401);}
   if(!r.ok){await r.body?.cancel();fail(r.status===429?'source_rate_limited':'source_unavailable',r.status===429?429:502);}
   const text=await boundedText(r,maxBytes);
@@ -50,7 +50,7 @@ export async function loadExamReport(session,examId,{fetcher=fetch}={}){
  const sid=session.cookies.match(/(?:^|; )DWRSESSIONID=([^;]+)/)?.[1];if(!sid)fail('session_expired',401);
  const body=['callCount=1','nextReverseAjaxIndex=0','instanceId=0','page=/tqweb/demo/MainAction.a','httpSessionId=',`scriptSessionId=${sid}/${Date.now()}`,'c0-scriptName=ServiceUtil','c0-methodName=doModifyCurrentTest','c0-id=0',`c0-param0=number:${examId}`,'batchId=3'].join('\n');
  // This is the source student's normal exam-selection action. No teacher path.
- const selected=await sourceRequest('/tqweb/dwr/call/plaincall/ServiceUtil.doModifyCurrentTest.dwr',session.cookies,{body,fetcher});
+ const selected=await sourceRequest('/tqweb/dwr/call/plaincall/ServiceUtil.doModifyCurrentTest.dwr',session.cookies,{body,fetcher,contentType:'text/plain'});
  if(parseDwrReply(selected,3)!==true)fail('source_report_unavailable');
  await sourceRequest('/tqweb/report/NewStudentReport.a?showStudentScoreReport',session.cookies,{body:new URLSearchParams({testId:examId,schoolIdStr:''}).toString(),fetcher});
  const html=await sourceRequest('/tqweb/report/NewStudentReport.a?doShowStudentReport&test_id='+examId,session.cookies,{body:'',fetcher});
