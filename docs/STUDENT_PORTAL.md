@@ -6,7 +6,7 @@ portal. The canonical source for this candidate is the privacy-release branch
 Default `master` is not the accepted Worker source. Do not trigger its legacy
 deployment workflow.
 
-Production page/API entrypoints remain unchanged. `frontend/student.html` and
+The custom domain serves this login-test entrypoint; the legacy teacher Worker stays disabled. `frontend/student.html` and
 `worker/src/student-preview.js` provide a bounded self-service login test, not
 a student exam application. Each submission uses the observed source student
 lookup and, for one matching school/class, its normal encrypted form POST.
@@ -14,8 +14,11 @@ The portal never treats a source redirect as verified student identity.
 
 - Preview route: POST `/api/student/login-check`, exact-origin JSON only,
   bounded input, no-store responses and no raw exceptions or source cookies.
-  Enabled on `paper.bdfz.net` and `*.k12media-web.pages.dev` preview hosts until an embedded
-  deadline. CPU cap 100 ms, no storage/AI bindings, no source retries. Browser
+  Enabled on `paper.bdfz.net` and `*.k12media-web.pages.dev` preview hosts. The owner explicitly
+  removed the fixed expiry on 2026-11-08; build with `none`. Missing or invalid
+  deadline configuration still fails closed. `STUDENT_LOGIN_TEST_ENABLED=false`
+  in the Pages preview environment remains an independent manual close switch.
+  CPU cap 100 ms, no storage/AI bindings, no source retries. Browser
   submits once per page; isolate-local hashed account/IP throttling is only a
   preview safeguard and is not a global production limiter.
 
@@ -73,7 +76,7 @@ Build the isolated preview from a pushed candidate commit (the output path is
 registered in the workspace artifact manifest):
 
 ```sh
-node scripts/build-student-preview.mjs /private/tmp/cf-task-paper-student-20261107/build <DEADLINE_ISO_WITHIN_7_DAYS>
+node scripts/build-student-preview.mjs /private/tmp/cf-task-paper-student-20261107/build none
 ```
 
 Use pinned Wrangler 4.60.0 from `worker/node_modules`, working in
@@ -94,3 +97,7 @@ through central release authority and verify Status. No production acceptance
 is implied by these modules or tests.
 
 Workspace investigation: `reports/operations/paper-student-20261107-01a1b986/REPORT.md`.
+
+## Authorized validation credentials and records
+
+The expressly authorized test account is kept only in the existing operator secret store. Application code, browser persistence, request logs and public feedback never retain plaintext credentials, encrypted credential payloads or source cookies. Operator evidence records the secret-store key reference, target, time, finite attempt budget and fixed outcome code, not account values. This does not authorize capturing other students passwords for later replay. A source timeout is unknown and stops replay; it is neither login success nor credential rejection. Status is deferred until the requested real acceptance succeeds.

@@ -43,6 +43,13 @@ test('API fails closed for origin, unknown routes, default-disabled and expired 
   assert.equal((await handleStudentPreview(new Request('https://preview.example/api/student/exams'),allowed,deps)).status,404);
   assert.equal(calls,0);
 });
+test('explicit no-expiry testing remains open while manual disable and invalid settings fail closed',async()=>{
+  let calls=0; const deps={limiter:async()=>true,checkLogin:async()=>{calls++;return {state:'source_form_submitted',authenticated:false};}};
+  assert.equal((await handleStudentPreview(req(),{STUDENT_LOGIN_TEST_ENABLED:'true',STUDENT_LOGIN_TEST_UNTIL:'none'},deps)).status,200);
+  for(const env of [{STUDENT_LOGIN_TEST_ENABLED:'false',STUDENT_LOGIN_TEST_UNTIL:'none'},{STUDENT_LOGIN_TEST_ENABLED:'true'},{STUDENT_LOGIN_TEST_ENABLED:'true',STUDENT_LOGIN_TEST_UNTIL:'typo'}])
+    assert.equal((await handleStudentPreview(req(),env,deps)).status,503);
+  assert.equal(calls,1);
+});
 test('API strips private source values and returns no-store without cookies or raw exceptions',async()=>{
   let captured;
   const res=await handleStudentPreview(req(),allowed,{limiter:async()=>true,checkLogin:async data=>{captured=data;return {state:'source_form_submitted',authenticated:false,cookies:'private-source',name:'private-name'};}});

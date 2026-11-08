@@ -6,7 +6,7 @@ const HEADERS = {
   'Content-Security-Policy': "default-src 'none'; frame-ancestors 'none'"
 };
 const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: HEADERS });
-// Best-effort isolate-local throttling for this short-lived preview. Production
+// Best-effort isolate-local throttling for student-led testing. Production
 // requires a shared limiter; this is not a cross-region/account lock guarantee.
 const attempts = new Map(); let salt;
 async function takeSlot(request, username) {
@@ -26,9 +26,12 @@ export async function handleStudentPreview(request, env = {}, { checkLogin = che
   if (request.headers.get('Origin') !== url.origin || request.headers.get('Sec-Fetch-Site') === 'cross-site')
     return json({ code: 'origin_refused' }, 403);
   if (request.headers.get('Content-Type')?.split(';')[0] !== 'application/json') return json({ code: 'invalid_request' }, 415);
-  // This flag and deadline are preview-only deployment controls. Default off.
+  // Default off. Only the explicit value "none" removes the deadline; missing
+  // or malformed configuration still fails closed. The enable flag remains
+  // the operator's independent manual close switch.
+  const noExpiry = env.STUDENT_LOGIN_TEST_UNTIL === 'none';
   const deadline = Date.parse(env.STUDENT_LOGIN_TEST_UNTIL || '');
-  if (env.STUDENT_LOGIN_TEST_ENABLED !== 'true' || !Number.isFinite(deadline) || Date.now() >= deadline)
+  if (env.STUDENT_LOGIN_TEST_ENABLED !== 'true' || (!noExpiry && (!Number.isFinite(deadline) || Date.now() >= deadline)))
     return json({ code: 'login_test_closed' }, 503);
   let data;
   try {
