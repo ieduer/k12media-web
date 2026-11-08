@@ -24,7 +24,7 @@ function sourceRequest(path, { signal } = {}) {
       if(response.headers.get('content-type')?.includes('json')){try{code=(await response.json()).code||code;}catch{}}else await response.body?.cancel();
       // Only a failed image GET is replayed; authentication and exam selection
       // never retry here. A second failure is retained in the export manifest.
-      if(attempt===0&&path.startsWith('/api/student/asset?')&&/^source_asset_http_50[0234]$/.test(code))continue;
+      if(attempt===0&&path.startsWith('/api/student/asset?')&&(/^source_asset_http_50[0234]$/.test(code)||['source_asset_timeout','source_asset_transport_failed'].includes(code)))continue;
       throw Object.assign(new Error(code),{code});
     }
     return response;

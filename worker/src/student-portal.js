@@ -107,13 +107,15 @@ async function routePortal(request,env,{fetcher=fetch,limiter=limit},context){
    return new Response('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>我的答卷</title><link rel="stylesheet" href="/css/report.css"></head><body><h1>我的答卷</h1>'+links.map((href,i)=>'<figure><a href="'+escapeHtml(href)+'" download="答卷-'+(i+1)+'"><img class="answer-page" src="'+escapeHtml(href)+'" alt="答卷第 '+(i+1)+' 页" loading="lazy"></a><figcaption>第 '+(i+1)+' 页</figcaption></figure>').join('')+'</body></html>',{headers:reportHeaders});
   }
   const asset=allowedAsset(ticket.url,ticket.examId);if(!asset||asset.type!==ticket.type)throw new StudentSourceError('invalid_asset',403);
-  let r;try{r=await fetcher(asset.url,{redirect:'manual',signal:AbortSignal.timeout(60000),headers:asset.url.startsWith('https://test.k12media.cn:8000/')?{Cookie:session.cookies}:{},cache:'no-store'});}catch(e){throw new StudentSourceError(e.name==='TimeoutError'?'source_asset_timeout':'source_asset_transport_failed');}
+  let r;try{r=await fetcher(asset.url,{redirect:'manual',signal:AbortSignal.timeout(30000),headers:asset.url.startsWith('https://test.k12media.cn:8000/')?{Cookie:session.cookies}:{},cache:'no-store'});}catch(e){throw new StudentSourceError(e.name==='TimeoutError'?'source_asset_timeout':'source_asset_transport_failed');}
   if(asset.url.startsWith('https://test.k12media.cn:8000/'))session.cookies=mergeSourceCookies(session.cookies,r.headers);
   if(!r.ok){await r.body?.cancel();throw new StudentSourceError('source_asset_http_'+r.status);}
   const type=r.headers.get('Content-Type')?.split(';')[0].toLowerCase();
   if(asset.type==='css'){if(type!=='text/css'){await r.body?.cancel();throw new StudentSourceError('source_asset_unavailable');}return new Response(cleanCss(await boundedText(r,512*1024)),{headers:{...headers,'Content-Type':'text/css; charset=utf-8'}});}
   const reader=r.body.getReader(),chunks=[];let size=0;
-  while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>25*1024*1024){await reader.cancel();throw new StudentSourceError('source_response_too_large');}chunks.push(value);}
+  try{while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>25*1024*1024){await reader.cancel();throw new StudentSourceError('source_response_too_large');}chunks.push(value);}}
+  catch(e){if(e instanceof StudentSourceError)throw e;throw new StudentSourceError(['TimeoutError','AbortError'].includes(e.name)?'source_asset_timeout':'source_asset_transport_failed');}
+  finally{reader.releaseLock();}
   const bytes=new Uint8Array(size);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.length;}
   const actual=bytes[0]===255&&bytes[1]===216&&bytes[2]===255?'image/jpeg':bytes[0]===137&&bytes[1]===80&&bytes[2]===78&&bytes[3]===71?'image/png':new TextDecoder().decode(bytes.slice(0,6)).match(/^GIF8[79]a$/)?'image/gif':new TextDecoder().decode(bytes.slice(0,4))==='RIFF'&&new TextDecoder().decode(bytes.slice(8,12))==='WEBP'?'image/webp':null;
   if(!actual)throw new StudentSourceError('source_asset_not_image');
