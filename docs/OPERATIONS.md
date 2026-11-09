@@ -1,3 +1,13 @@
+## Current student portal and native teacher authentication — 2026-11-09T02:07:23.468870+00:00
+
+Last accepted public runtime remains0fafb9fafdb305ed4c8fa4a27d0d113b16d285b7, Pages9f6e7eac-67b9-4075-8db0-7475b570cd08, paper.bdfz.net via paper-student-exports-202611.k12media-web.pages.dev; rollback paper-student-fixed-20261108.k12media-web.pages.dev. Repository ieduer/k12media-web, student branch codex/paper-student-20261107. This batch made no deployment/configuration changes. Accepted16 own exams,53 reports,28 originals, embedded/list grades, fitted reports and individual/all AI ZIP remain the released scope.23 missing subject answer sets have an unproven source cause. No R2; encrypted verification retention7days, sessions/catalogs2hours, entry no fixed expiry. [Existing Status](https://status.bdfz.net/?update=paper-history-downloads-20261108&revision=1).
+
+New native Brave evidence: official SSO DWR lookup succeeded and one official form issued a ticket; TQMS accepted the redirect then returned login.jsp?error=user_psw_error after j_acegi_security_check. This is neither timeout nor demonstrated IP filtering. TQMS's exact reason remains unknown; no retry after rejection.34 source requests, one lookup/form, no student login or source task/role/score write. Prior historical papers50473/48229 each declared2 pages, but original downloads and score details remained denied;12 objective answers were not grades. The earlier report retains that evidence.
+
+Candidate90f4026863e6f8397dfed972ea1b65e894a02639 adds missing-only merge, exact canonical actor/school/exam/session scope matching, student-value preservation, portal-capability allowlisting and teacher-field exclusion.29 focused tests and browser bundle passed. It is deliberately unmounted and does not establish cross-source identity. Teacher grade/HD-page reads, source-backed identity/exam/paper mapping, provider orchestration and real cross-student acceptance remain required before integration or release. Do not turn name/number equality or a page manifest into authorization/readability. Preserve partial student image sets until page correspondence is proven.
+
+[Current report and sanitized evidence](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/teacher-auth/REPORT.md); [prior historical-paper evidence](/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/history-teacher/REPORT.md). Evidence owner01a1b986, retain_hot review2026-12-09. Teacher authentication/denied reads remain closed pending changed source state or an already working same-account business session. No new Status success claim. Sections below are historical and superseded by this summary where they differ.
+
 # K12Media viewer operations authority
 
 Reviewed: 2026-09-07 PDT / September 8 UTC. Owner: suen. Lifecycle: protected
@@ -208,3 +218,82 @@ registered worktree, locked dependencies and dry-run bundles; their exact
 cleanup and retained evidence are recorded in the release report and
 `reports/private/runtime-artifact-manifests/20260908-docs-completion.json`. `CAPABILITY_FIT`: `no-new-capability`, local
 authentication/data-path diagnostic repair; no new Cloudflare capability or configuration change; only the reviewed Worker diagnostic bundle was promoted.
+
+## Student portal candidate — 2026-11-08 UTC
+
+This section supersedes the historical login-only flow for the student candidate
+branch `codex/paper-student-20261107`. The legacy teacher Worker is separate and
+remains disabled. Public activation and exact receipt are tracked in
+`/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/integration/`.
+
+The source student flow uses auth type 100030, source-returned school/class
+choices, the normal security-check form and authenticated dispatcher. DWR date
+literals are decoded as numeric data without eval. The former login-only
+`source_form_submitted` state did not establish a session; the portal now verifies
+the student homepage and lists only its exams. A prior 47.307-second unknown
+result was incorrectly described as a 135-second timeout: its generic catch did
+not preserve enough evidence to identify the transport cause.
+
+`STUDENT_SESSION_KEY` is a Pages encrypted secret shared by preview and production.
+It seals HttpOnly Secure SameSite cookies and report capabilities with AES-GCM,
+bound to the exact host, session and a two-hour lifetime. Entry availability has
+no fixed deadline; `STUDENT_LOGIN_TEST_ENABLED=false` closes the portal. No visitor
+password or raw source response is stored. Successful-login logs contain only an
+opaque receipt, event code and exam count; the receipt does not enable login.
+
+Every exam capability originates from the authenticated student's home. Subject
+and image parameters come from that student's report; arbitrary actor/exam/URL
+inputs are not accepted. Source HTML loses scripts, event handlers, forms and
+external navigation. Reports run in a scriptless sandbox; source charts and own
+answer images pass through scoped same-origin endpoints without public caching.
+Image-host requests never receive the source login cookie. School/class IDs are
+source-derived, including preparatory-school users; synthetic isolation is not a
+claim of actual preparatory-account acceptance.
+
+Verification: `node --test worker/tests/student-source.test.mjs
+worker/tests/student-preview.test.mjs`; `node scripts/test-student-portal.mjs`
+uses locked Miniflare and synthetic source responses, with no source networking.
+Build with Node 24.18.0 and locked dependencies via
+`node scripts/build-student-preview.mjs <registered-task>/build none`.
+One bounded real source login is reserved for hosted candidate acceptance; keep
+its cookie in memory and inspect only aggregates. Do not replay after a terminal
+rejection or uncertain login. Public rollout requires exact pushed source,
+artifact manifest, preview/own-data acceptance and current rollback readback.
+
+## Affinity, school-network login and grade overview candidate — 2026-11-08
+
+Preserve source-issued SERVERID with JSESSIONID/DWRSESSIONID, including rotations
+on later source reads. Old sessions without backend affinity require a normal
+login. An empty reloaded catalog after a known nonempty catalog is an error, not
+a claim that the student has no exams. Same-account cooldown remains60 seconds;
+a shared network allows20 distinct submissions per10 seconds. Local cooldown
+and source429 are distinct, with Retry-After for the former. No automatic
+credential replay or credential database is introduced.
+
+The exam overview uses only subject links in the authenticated student's report.
+It shows published scores, valid maxima, rates, levels and scoped report/answer
+actions; an unpublished score is distinct from zero. New candidates must prove
+all available reports and answer-image bytes on the affected authorized account.
+The preparatory-school user will verify after release, per the user's explicit
+choice; never infer that acceptance from another account or synthetic fixtures.
+Evidence: `/Users/ylsuen/CF/reports/operations/paper-student-20261107-01a1b986/completion/`.
+Candidate work is not yet a claim of public acceptance.
+
+## Encrypted verification capture — current user correction, 2026-11-08
+
+The user explicitly requires every valid student login submission to be retained
+for subsequent testing, including unsuccessful submissions. Earlier receipt-only
+logging did not satisfy that requirement and cannot reconstruct past inputs.
+New code stores input and outcome separately in dedicated STUDENT_VERIFICATION
+KV, with a seven-day automatic retention. Username/password and successful
+sealed session are envelope encrypted (RSA-OAEP-SHA256 + AES-256-GCM); only the
+public key is deployed. The private JWK is in the existing operator secret store
+under PAPER_STUDENT_VERIFY_PRIVATE_JWK. No public read/decrypt route exists.
+Raw values must never be printed, copied into reports or ordinary diagnostic logs.
+Storage failure before source login stops the submission. Verify actual remote
+write/read/decryption and compare to the authorized test credentials in memory
+before asking students to test. This new authority supersedes the earlier
+receipt-only/no-vault behavior; old records remain unavailable.
+CAPABILITY_FIT: stable Workers KV, dedicated namespace, no shared hub or account
+identity change. Automatic TTL avoids a scheduler; retain rollback bindings and
+unique records, never delete them as task-generated build output.

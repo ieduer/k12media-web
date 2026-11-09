@@ -1,0 +1,8 @@
+{
+  "$schema": "../worker/node_modules/wrangler/config-schema.json",
+  "name": "k12media-web",
+  "pages_build_output_dir": "../../build",
+  "compatibility_date": "2026-01-22",
+  "send_metrics": false,
+  "limits": { "cpu_ms": 100 }
+}
